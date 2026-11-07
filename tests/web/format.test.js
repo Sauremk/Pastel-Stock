@@ -109,3 +109,10 @@ test('construirConsulta: omite valores vacíos y codifica', () => {
   assert.equal(construirConsulta({}), '');
   assert.equal(construirConsulta(undefined), '');
 });
+
+import { nuevaClaveIdempotencia } from '../../web/js/format.js';
+test('nuevaClaveIdempotencia: cumple el patrón del contrato y no se repite', () => {
+  const claves = new Set(Array.from({ length: 200 }, () => nuevaClaveIdempotencia()));
+  assert.equal(claves.size, 200);
+  for (const c of claves) assert.match(c, /^[A-Za-z0-9_-]{8,64}$/);
+});

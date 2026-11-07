@@ -149,3 +149,25 @@ test('api: POST con JSON, 204 sin cuerpo y descarga de archivos', async () => {
   assert.equal(f.blob.tipo, 'application/pdf');
   assert.match(e.llamadas[3].url, /tipo=materias&formato=pdf$/);
 });
+
+test('api: las cabeceras opcionales (Idempotency-Key) viajan en la petición y se conservan en el reintento tras renovar el token', async () => {
+  const storage = almacen(); storage.setItem('ps.refresh', 'ref0');
+  const vistas = [];
+  const fetchImpl = async (url, init) => {
+    if (/\/auth\/refresh$/.test(url)) return respuesta(200, par(5));
+    vistas.push({ auth: init.headers.Authorization ?? null, clave: init.headers['Idempotency-Key'] ?? null });
+    return vistas.length === 1 ? respuesta(401, { title: 'expirado' }) : respuesta(201, { ok: true });
+  };
+  const auth = crearAuth({ storage, fetchImpl });
+  const api = crearApi({ auth, fetchImpl });
+  const r = await api.post('/recetas/1/producir', { unidades: 1 }, { cabeceras: { 'Idempotency-Key': 'clave-prueba-0001' } });
+  assert.deepEqual(r, { ok: true });
+  assert.equal(vistas.length, 2);
+  assert.deepEqual(vistas.map((v) => v.clave), ['clave-prueba-0001', 'clave-prueba-0001']); // misma clave en el reintento
+});
+
+test('api: sin opciones no agrega cabeceras de idempotencia', async () => {
+  const fetchImpl = async (url, init) => { assert.equal('Idempotency-Key' in init.headers, false); return respuesta(201, {}); };
+  const api = crearApi({ auth: { token: () => 'x', tieneRefresh: () => false }, fetchImpl });
+  await api.post('/movimientos/entradas', { codigo: 'MP001', cantidad: 1, proveedor: 'p' });
+});

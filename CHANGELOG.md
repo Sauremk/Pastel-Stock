@@ -2,6 +2,11 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [Sin publicar] — Validación y piloto II–06
+
+### Corregido
+- La interfaz enviaba «producir» sin `Idempotency-Key`: si se perdía la respuesta y la persona reintentaba, se producía dos veces (comprobado en navegador: 1 intención → 2 producciones). Ahora genera una clave por intención (se renueva al cambiar el formulario y tras un éxito) y la conserva en el reintento tras renovar el token.
+
 ## [Sin publicar] — Despliegue y operación II–05
 
 ### Añadido
