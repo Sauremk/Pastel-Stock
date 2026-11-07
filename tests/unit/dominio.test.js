@@ -8,7 +8,7 @@ import { traducirErrorPg, AppError } from '../../src/shared/errors.js';
 import { abreviarNombre } from '../../src/inventory/adapters/pg/movimientosRepo.js';
 import { cargarConfig, validarConfig } from '../../src/config.js';
 
-test('convertir: 4 unid de huevo equivalen a 0,333 docena (DT-09)', () => {
+test('convertir: 4 unid de huevo equivalen a 0,333333 docena (DT-09, DT-18)', () => {
   assert.equal(convertir(4, 'unid', 'docena'), 0.333333);
   assert.equal(convertir(500, 'g', 'kg'), 0.5);
   assert.equal(convertir(2, 'L', 'ml'), 2000);

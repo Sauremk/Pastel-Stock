@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [Sin publicar] — Calidad II–04
+
+### Añadido
+- Pruebas de frontera y seguridad de «producir» (`tests/integration/fronteras.test.js`) y regresión de contraste (`tests/web/contraste.test.js`).
+
+### Corregido
+- Login: el marcador de posición de los campos tenía contraste 2,24:1 (WCAG 2.x AA exige 4,5:1); ahora usa el color secundario del tema (D-02).
+- Prueba del tablero dependía del día real (fallaba al cambiar la fecha); ahora fija la fecha del movimiento (D-01).
+
 ## [Sin publicar] — Incremento II–03
 
 ### Añadido

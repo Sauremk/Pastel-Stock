@@ -559,6 +559,9 @@ input, select, textarea {
     color: var(--color-texto);
 }
 
+/* II-04: el marcador de posición por defecto del navegador (#a5a9b0) tenía contraste 2,24:1; se usa el color secundario del tema (≥ 4,5:1). */
+::placeholder { color: var(--color-texto-secundario); opacity: 1; }
+
 input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--color-primario);

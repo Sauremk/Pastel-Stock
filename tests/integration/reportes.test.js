@@ -35,6 +35,8 @@ test('dashboard: KPI calculados desde los datos reales (no simulados, DT-10)', a
 test('dashboard: una entrada nueva se refleja de inmediato en compras y en el valor del inventario', async () => {
   const antes = (await e.api.get('/api/v1/reportes/dashboard').set(admin)).body;
   await e.api.post('/api/v1/movimientos/entradas').set(operador).send({ codigo: 'MP002', cantidad: 1000, proveedor: 'Distribuidora La Esperanza' });
+  // El reloj de la aplicación está fijo en 6-nov pero la base graba now(): se fija la fecha de la fila para que la prueba no dependa del día real.
+  await e.pool.query("UPDATE movimientos SET creado_en = '2026-11-06T10:00:00-05:00' WHERE id = (SELECT max(id) FROM movimientos)");
   const despues = (await e.api.get('/api/v1/reportes/dashboard').set(admin)).body;
   assert.equal(despues.comprasUltimos30Dias, antes.comprasUltimos30Dias + 3000);
   assert.equal(despues.valorInventarioInsumos, antes.valorInventarioInsumos + 3000);
