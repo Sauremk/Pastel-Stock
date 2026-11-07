@@ -156,3 +156,9 @@ export function construirConsulta(params) {
   const texto = q.toString();
   return texto ? `?${texto}` : '';
 }
+
+/** Clave de idempotencia (32 hex = 128 bits aleatorios; cumple ^[A-Za-z0-9_-]{8,64}$ del contrato). Usa getRandomValues, que no exige HTTPS. */
+export function nuevaClaveIdempotencia(cripto = globalThis.crypto) {
+  const b = cripto.getRandomValues(new Uint8Array(16));
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+}

@@ -4,7 +4,7 @@ import {
   abrirModal, confirmar, toast, toastError, campo, idCampo, selectControl, mostrarErrores, crearAvisoFormulario, conBotonOcupado,
 } from '../ui.js';
 import { UNIDADES } from '../catalogos.js';
-import { formatoNumero, infoEstado, mensajeDeError } from '../format.js';
+import { formatoNumero, infoEstado, mensajeDeError, nuevaClaveIdempotencia } from '../format.js';
 import { validarReceta, validarProduccion } from '../validacion.js';
 import { botonesExportar } from './exportar.js';
 
@@ -69,6 +69,8 @@ export function crearVista(ctx) {
   function abrirProduccion(r) {
     const aviso = crearAvisoFormulario();
     const resultado = h('div', {});
+    // Una clave por intención: si la red falla y la persona reintenta, el servidor no vuelve a producir (ADR-16).
+    let clave = nuevaClaveIdempotencia();
     const unidades = campo({ id: idCampo('prod-unidades'), etiqueta: 'Unidades a producir', requerido: true,
       ayuda: 'Cada unidad consume una vez los ingredientes de la receta.', control: h('input', { type: 'number', min: '1', max: '1000', step: '1', inputmode: 'numeric', value: '1' }) });
     const nota = campo({ id: idCampo('prod-nota'), etiqueta: 'Nota (opcional)', control: h('textarea', { maxlength: '200', rows: '2' }) });
@@ -88,7 +90,8 @@ export function crearVista(ctx) {
       mostrarErrores({ unidades, nota }, errores);
       if (!valido) return;
       try {
-        const res = await conBotonOcupado(enviar, () => api.post(`/recetas/${r.id}/producir`, datos), 'Produciendo…');
+        const res = await conBotonOcupado(enviar, () => api.post(`/recetas/${r.id}/producir`, datos, { cabeceras: { 'Idempotency-Key': clave } }), 'Produciendo…');
+        clave = nuevaClaveIdempotencia(); // la siguiente producción es otra intención
         reemplazarHijos(resultado,
           h('div', { class: 'banner-ok', role: 'status' }, `Producción registrada. Stock de ${r.productoNombre}: ${formatoNumero(res.stockProducto)} unidades.`),
           tabla({
@@ -106,7 +109,7 @@ export function crearVista(ctx) {
         aviso.mostrar(mensajeDeError(e));
       }
     });
-    form.addEventListener('input', () => { aviso.ocultar(); });
+    form.addEventListener('input', () => { aviso.ocultar(); clave = nuevaClaveIdempotencia(); }); // si cambia el contenido, es otra intención
   }
 
   // ------------------------------------------------------------ Crear / editar

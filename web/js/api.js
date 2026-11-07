@@ -2,11 +2,12 @@
 import { ApiError, parseProblema, construirConsulta, nombreDeArchivo } from './format.js';
 
 export function crearApi({ auth, fetchImpl = (...a) => globalThis.fetch(...a), baseUrl = '/api/v1', alSesionExpirada = () => {} } = {}) {
-  async function ejecutar(metodo, ruta, { consulta, cuerpo, archivo = false } = {}, puedeReintentar = true) {
+  async function ejecutar(metodo, ruta, { consulta, cuerpo, archivo = false, cabeceras = {} } = {}, puedeReintentar = true) {
     const headers = { Accept: archivo ? '*/*' : 'application/json, application/problem+json' };
     const token = auth.token();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
+    Object.assign(headers, cabeceras);
 
     let resp;
     try {
@@ -26,7 +27,7 @@ export function crearApi({ auth, fetchImpl = (...a) => globalThis.fetch(...a), b
           auth.cerrarSesion(); alSesionExpirada();
           throw new ApiError(parseProblema(401, null));
         }
-        return ejecutar(metodo, ruta, { consulta, cuerpo, archivo }, false);
+        return ejecutar(metodo, ruta, { consulta, cuerpo, archivo, cabeceras }, false);
       }
       auth.cerrarSesion(); alSesionExpirada();
     }
@@ -45,7 +46,7 @@ export function crearApi({ auth, fetchImpl = (...a) => globalThis.fetch(...a), b
 
   return {
     get: (ruta, consulta) => ejecutar('GET', ruta, { consulta }),
-    post: (ruta, cuerpo) => ejecutar('POST', ruta, { cuerpo }),
+    post: (ruta, cuerpo, opciones = {}) => ejecutar('POST', ruta, { cuerpo, cabeceras: opciones.cabeceras }),
     put: (ruta, cuerpo) => ejecutar('PUT', ruta, { cuerpo }),
     del: (ruta) => ejecutar('DELETE', ruta),
     descargar: (ruta, consulta) => ejecutar('GET', ruta, { consulta, archivo: true }),
