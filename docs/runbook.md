@@ -23,6 +23,18 @@ GitHub → **Actions → CD → Run workflow** → marcar `rollback`:
 
 El workflow ejecuta el healthcheck tras el rollback. Después de revertir, abra un postmortem si el impacto superó 10 minutos.
 
+## Entrega y reversión (ensayada en II-05)
+
+El procedimiento completo está automatizado y se ensaya con datos ficticios en dos clústeres PostgreSQL 16 separados:
+
+```bash
+scripts/ensayo-despliegue.sh <SHA_ANTERIOR> <SHA_CANDIDATA> [/tmp/ensayo]   # deja el registro en ensayo.log
+```
+
+Orden de una entrega (parada controlada): 1) respaldo `pg_dump -Fc` y **restauración en una base aislada con comparación de conteos** → 2) detener la versión anterior (SIGTERM) → 3) `npm run migrate` **una sola vez**, con la versión candidata (`RUN_MIGRATIONS=false` en las instancias; el bloqueo consultivo evita carreras, pero un único responsable simplifica el diagnóstico) → 4) iniciar la candidata → 5) `scripts/healthcheck.sh <url> <sha>` (exige que `/health` informe **esa** versión) → 6) prueba funcional con datos ficticios (entrada, producción con `Idempotency-Key`, reinicio y relectura) → 7) observar y decidir conservar o recuperar.
+
+**No vuelva al ejecutable anterior después de aplicar la migración 002** sin leer esto: la versión 1.0.0 arranca y responde 200 sobre el esquema de 6 decimales, pero **redondea a 3 decimales al escribir** (ensayo G4: 0,333333 → 0,333) y desconoce `claves_idempotencia`. Ante un defecto de la candidata, la salida preferida es **corregir hacia adelante**. Si debe restaurar el respaldo previo, se perderán todos los movimientos posteriores a él (ensayo H1); antes de decidir, exporte los movimientos nuevos (`COPY … TO`) para reaplicarlos.
+
 ## Respaldo y restauración de la base de datos
 
 ```bash

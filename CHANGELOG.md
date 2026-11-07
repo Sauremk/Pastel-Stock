@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [Sin publicar] — Despliegue y operación II–05
+
+### Añadido
+- `scripts/ensayo-despliegue.sh`: ensayo automatizado de entrega, verificación, incidente y recuperación en dos clústeres PostgreSQL 16 locales con datos ficticios.
+- Runbook: sección «Entrega y reversión» y advertencia sobre la reversión de código tras la migración 002.
+- Deuda DT-20 (500 en lugar de 503 con la base caída) y DT-21 (reversión con redondeo a 3 decimales).
+
 ## [Sin publicar] — Calidad II–04
 
 ### Añadido
