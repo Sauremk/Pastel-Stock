@@ -1,0 +1,31 @@
+# Reglas de grabación y alertas del SLO de Pastel Stock (ADR-14, docs/SLO.md).
+# SLO de disponibilidad: 99,5 % en 30 días móviles  → presupuesto de error 0,5 % (3,6 h/mes).
+# SLO de latencia: p95 < 300 ms en ≥ 95 % de las ventanas de 5 min.
+groups:
+  - name: sli-entradas
+    interval: 1m
+    rules:
+      - record: sli:entradas_disponibilidad:ratio_30d
+        expr: >-
+          1 - (sum(increase(http_server_request_duration_count{http_route="/api/v1/movimientos/entradas",http_response_status_code=~"5.."}[30d])) or vector(0))
+          / sum(increase(http_server_request_duration_count{http_route="/api/v1/movimientos/entradas"}[30d]))
+      - record: sli:entradas_presupuesto_restante:ratio
+        expr: 1 - ((1 - sli:entradas_disponibilidad:ratio_30d) / 0.005)
+      - record: sli:entradas_latencia_p95:5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{http_route="/api/v1/movimientos/entradas"}[5m])))
+      - record: sli:entradas_ventana_buena:5m
+        expr: sli:entradas_latencia_p95:5m < bool 0.3
+      - record: sli:entradas_latencia_cumplimiento:ratio_30d
+        expr: avg_over_time(sli:entradas_ventana_buena:5m[30d])
+      - alert: PresupuestoDeErrorAgotado
+        expr: sli:entradas_presupuesto_restante:ratio < 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Presupuesto de error agotado: congelar despliegues de funcionalidades"
+      - alert: PresupuestoDeErrorBajo
+        expr: sli:entradas_presupuesto_restante:ratio < 0.25
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Queda menos del 25 % del presupuesto de error del mes"

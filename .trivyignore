@@ -1,0 +1,4 @@
+# Exclusiones JUSTIFICADAS (formato: ID exp:AAAA-MM-DD). Toda línea requiere comentario y fecha de expiración.
+# Actualmente SIN exclusiones activas: los escaneos reales de Pastel Stock no produjeron falsos positivos.
+# Plantilla (NO descomentar sin evidencia):
+# CVE-AAAA-NNNNN exp:2026-12-31   # <paquete>: solo en devDependencies / ruta no alcanzable en runtime. Responsable: <nombre>. Revisión: <fecha>.

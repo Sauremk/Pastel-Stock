@@ -1,0 +1,1400 @@
+openapi: 3.1.0
+info:
+  title: Pastel Stock API
+  version: 1.0.0
+  summary: API de inventario de materias primas, productos terminados y recetas para Dulce Hogar.
+  description: 'Contrato **Design-First** de la API de Pastel Stock (monolito modular, Node.js + PostgreSQL).
+
+    Contextos delimitados (ADR-05): **Identidad y Acceso**, **Inventario**, **Catálogo y Producción**, **Reportes**.
+
+
+    **Seguridad:** todas las operaciones exigen `bearerAuth` (JWT) salvo `login`, `refresh` y `health`,
+
+    que declaran `security: []` de forma explícita y justificada.
+
+    **Roles:** `admin` (todo), `operador` (ver + movimientos), `contador` (ver + reportes). Se documentan en `x-roles`.
+
+    **Errores:** `application/problem+json` (RFC 9457).
+
+    '
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: Equipo Pastel Stock
+servers:
+- url: /api/v1
+  description: Ruta relativa al host donde se despliega (local, staging o producción; los hosts se definen en la Guía 11).
+security:
+- bearerAuth: []
+tags:
+- name: Identidad
+  description: Contexto Identidad y Acceso
+- name: Inventario
+  description: Contexto Inventario de Materias Primas y Movimientos
+- name: Catálogo
+  description: Contexto Catálogo de Productos y Recetas
+- name: Reportes
+  description: Contexto Reportes y Analítica
+- name: Sistema
+  description: Salud del servicio
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Identidad
+      operationId: iniciarSesion
+      summary: Iniciar sesión y obtener tokens
+      description: Público por diseño (el token aún no existe). Limitar a 5 intentos por minuto por IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credenciales'
+      responses:
+        '200':
+          description: Autenticación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPar'
+        '400':
+          $ref: '#/components/responses/Solicitud400'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes429'
+  /auth/refresh:
+    post:
+      tags:
+      - Identidad
+      operationId: renovarToken
+      summary: Renovar el access token con un refresh token vigente
+      description: Público (se autentica con el refresh token en el cuerpo). El refresh token rota en cada uso.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshSolicitud'
+      responses:
+        '200':
+          description: Nuevo par de tokens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPar'
+        '400':
+          $ref: '#/components/responses/Solicitud400'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+  /materias-primas:
+    get:
+      tags:
+      - Inventario
+      operationId: listarMateriasPrimas
+      summary: Listar materias primas
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      - name: categoria
+        in: query
+        schema:
+          $ref: '#/components/schemas/CategoriaMateriaPrima'
+      - name: estado
+        in: query
+        schema:
+          $ref: '#/components/schemas/EstadoStock'
+      - name: q
+        in: query
+        description: Búsqueda por código o nombre.
+        schema:
+          type: string
+          maxLength: 60
+      responses:
+        '200':
+          description: Página de materias primas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MateriaPrimaPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+    post:
+      tags:
+      - Inventario
+      operationId: crearMateriaPrima
+      summary: Crear una materia prima
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MateriaPrimaCrear'
+      responses:
+        '201':
+          description: Creada.
+          headers:
+            Location:
+              description: URI del recurso creado.
+              schema:
+                type: string
+                examples:
+                - /api/v1/materias-primas/MP006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MateriaPrima'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /materias-primas/{codigo}:
+    parameters:
+    - $ref: '#/components/parameters/CodigoMP'
+    get:
+      tags:
+      - Inventario
+      operationId: obtenerMateriaPrima
+      summary: Consultar una materia prima
+      x-roles:
+      - admin
+      - operador
+      - contador
+      responses:
+        '200':
+          description: Materia prima encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MateriaPrima'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+    put:
+      tags:
+      - Inventario
+      operationId: reemplazarMateriaPrima
+      summary: Reemplazar los datos de una materia prima
+      description: Actualización completa e idempotente. El stock NO se edita aquí; cambia solo con movimientos.
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MateriaPrimaActualizar'
+      responses:
+        '200':
+          description: Actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MateriaPrima'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+    delete:
+      tags:
+      - Inventario
+      operationId: eliminarMateriaPrima
+      summary: Eliminar una materia prima
+      description: Falla con 409 si la materia prima está en uso por una receta (regla del MVP, línea 1507).
+      x-roles:
+      - admin
+      responses:
+        '204':
+          description: Eliminada.
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+  /movimientos/entradas:
+    post:
+      tags:
+      - Inventario
+      operationId: registrarEntrada
+      summary: Registrar una entrada de materia prima (endpoint crítico)
+      description: 'Suma stock de forma atómica y crea el movimiento (kardex). Corrige DT-08: `cantidad` debe ser > 0.
+
+        '
+      x-roles:
+      - admin
+      - operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntradaCrear'
+      responses:
+        '201':
+          description: Entrada registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntradaResultado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /movimientos:
+    get:
+      tags:
+      - Inventario
+      operationId: listarMovimientos
+      summary: Listar movimientos (kardex)
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      - name: codigo
+        in: query
+        schema:
+          type: string
+          pattern: ^MP[0-9]{3,}$
+      - name: desde
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: hasta
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Página de movimientos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+  /productos:
+    get:
+      tags:
+      - Catálogo
+      operationId: listarProductos
+      summary: Listar productos terminados
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      - name: categoria
+        in: query
+        schema:
+          $ref: '#/components/schemas/CategoriaProducto'
+      responses:
+        '200':
+          description: Página de productos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+    post:
+      tags:
+      - Catálogo
+      operationId: crearProducto
+      summary: Crear un producto terminado
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoCrear'
+      responses:
+        '201':
+          description: Creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /productos/{sku}:
+    parameters:
+    - name: sku
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^PT[0-9]{3,}$
+        examples:
+        - PT001
+    get:
+      tags:
+      - Catálogo
+      operationId: obtenerProducto
+      summary: Consultar un producto
+      x-roles:
+      - admin
+      - operador
+      - contador
+      responses:
+        '200':
+          description: Producto encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+    put:
+      tags:
+      - Catálogo
+      operationId: reemplazarProducto
+      summary: Reemplazar los datos de un producto
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoActualizar'
+      responses:
+        '200':
+          description: Actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+    delete:
+      tags:
+      - Catálogo
+      operationId: eliminarProducto
+      summary: Eliminar un producto
+      x-roles:
+      - admin
+      responses:
+        '204':
+          description: Eliminado.
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+  /recetas:
+    get:
+      tags:
+      - Catálogo
+      operationId: listarRecetas
+      summary: Listar recetas (fichas técnicas)
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de recetas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecetaPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+    post:
+      tags:
+      - Catálogo
+      operationId: crearReceta
+      summary: Crear una receta
+      description: Los ingredientes se enlazan por código de materia prima, no por nombre (corrige DT-09).
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecetaCrear'
+      responses:
+        '201':
+          description: Creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receta'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /reportes/dashboard:
+    get:
+      tags:
+      - Reportes
+      operationId: obtenerDashboard
+      summary: KPI del tablero calculados desde los datos reales
+      description: Sustituye los datos simulados del MVP (DT-10).
+      x-roles:
+      - admin
+      - operador
+      - contador
+      responses:
+        '200':
+          description: Indicadores del tablero.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+  /reportes/export:
+    get:
+      tags:
+      - Reportes
+      operationId: exportarReporte
+      summary: Exportar un listado a PDF o Excel
+      x-roles:
+      - admin
+      - contador
+      parameters:
+      - name: tipo
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - materias
+          - productos
+          - recetas
+      - name: formato
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - pdf
+          - xlsx
+      responses:
+        '200':
+          description: Archivo generado en el servidor.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                contentMediaType: application/pdf
+                contentEncoding: base64
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                contentMediaType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+                contentEncoding: base64
+        '400':
+          $ref: '#/components/responses/Solicitud400'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+  /health:
+    get:
+      tags:
+      - Sistema
+      operationId: verificarSalud
+      summary: Verificar que el servicio responde
+      description: Público (lo consumen el HEALTHCHECK de Docker y el despliegue). No expone información interna.
+      security: []
+      responses:
+        '200':
+          description: Servicio operativo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - estado
+                - status
+                - db
+                - version
+                properties:
+                  estado:
+                    type: string
+                    enum:
+                    - ok
+                  status:
+                    type: string
+                    enum:
+                    - ok
+                    description: Alias en inglés de `estado` para herramientas de infraestructura.
+                  db:
+                    type: string
+                    enum:
+                    - up
+                    description: Resultado de `SELECT 1` contra PostgreSQL.
+                  version:
+                    type: string
+                    description: Versión desplegada (SHA del commit).
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes429'
+        '503':
+          description: Servicio no disponible.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+  /recetas/{id}:
+    parameters:
+    - &id001
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    get:
+      tags:
+      - Catálogo
+      operationId: obtenerReceta
+      summary: Consultar una receta
+      x-roles:
+      - admin
+      - operador
+      - contador
+      responses:
+        '200':
+          description: Receta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receta'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+    put:
+      tags:
+      - Catálogo
+      operationId: reemplazarReceta
+      summary: Reemplazar los ingredientes de una receta
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecetaActualizar'
+      responses:
+        '200':
+          description: Actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receta'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+    delete:
+      tags:
+      - Catálogo
+      operationId: eliminarReceta
+      summary: Eliminar una receta
+      x-roles:
+      - admin
+      responses:
+        '204':
+          description: Eliminada.
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+  /recetas/{id}/producir:
+    parameters:
+    - *id001
+    post:
+      tags:
+      - Catálogo
+      operationId: producirReceta
+      summary: Registrar una producción
+      x-roles:
+      - admin
+      - operador
+      description: Consume los ingredientes de la receta (movimientos SALIDA) y suma stock al producto terminado, todo en
+        una sola transacción. Falla con 409 si algún ingrediente no alcanza (el stock nunca queda negativo). Corrige DT-08
+        y DT-09.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProducirSolicitud'
+      responses:
+        '201':
+          description: Producción registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProducirResultado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token JWT (HS256 en desarrollo; vida 15 min). Claims `sub`, `rol`, `iat`, `exp`.
+  parameters:
+    Pagina:
+      name: pagina
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limite:
+      name: limite
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CodigoMP:
+      name: codigo
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^MP[0-9]{3,}$
+        examples:
+        - MP001
+  responses:
+    Solicitud400:
+      description: Solicitud mal formada.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoAutenticado401:
+      description: Token ausente, inválido o vencido.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            examples:
+            - Bearer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    Prohibido403:
+      description: Autenticado, pero el rol no tiene permiso.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoEncontrado404:
+      description: El recurso no existe.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    Conflicto409:
+      description: Conflicto con el estado actual (código duplicado o recurso en uso).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    Validacion422:
+      description: Los datos no cumplen las reglas de negocio.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    DemasiadasSolicitudes429:
+      description: Se superó el límite de intentos.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    Problema:
+      type: object
+      description: Error según RFC 9457.
+      required:
+      - type
+      - title
+      - status
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          examples:
+          - /errores/cantidad-invalida
+        title:
+          type: string
+          examples:
+          - La cantidad debe ser mayor que cero
+        status:
+          type: integer
+          examples:
+          - 422
+        detail:
+          type: string
+        instance:
+          type: string
+    Credenciales:
+      type: object
+      required:
+      - usuario
+      - contrasena
+      additionalProperties: false
+      properties:
+        usuario:
+          type: string
+          minLength: 3
+          maxLength: 40
+          examples:
+          - operador
+        contrasena:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+          writeOnly: true
+    RefreshSolicitud:
+      type: object
+      required:
+      - refreshToken
+      additionalProperties: false
+      properties:
+        refreshToken:
+          type: string
+    TokenPar:
+      type: object
+      required:
+      - accessToken
+      - refreshToken
+      - expiraEn
+      - rol
+      - nombre
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiraEn:
+          type: integer
+          description: Segundos de vida del access token.
+          examples:
+          - 900
+        rol:
+          $ref: '#/components/schemas/Rol'
+        nombre:
+          type: string
+          examples:
+          - Ana García
+    Rol:
+      type: string
+      enum:
+      - admin
+      - operador
+      - contador
+    UnidadMedida:
+      type: string
+      enum:
+      - g
+      - kg
+      - ml
+      - L
+      - unid
+      - docena
+    CategoriaMateriaPrima:
+      type: string
+      enum:
+      - Harinas
+      - Endulzantes
+      - Lácteos
+      - Lácteos/Huevos
+      - Saborizantes
+      - Frutas
+    CategoriaProducto:
+      type: string
+      enum:
+      - Pasteles
+      - Panes
+      - Galletas
+      - Tartas
+      - Postres
+    EstadoStock:
+      type: string
+      enum:
+      - CRITICO
+      - BAJO
+      - OPTIMO
+    MateriaPrimaBase:
+      type: object
+      required:
+      - nombre
+      - categoria
+      - unidad
+      - minimo
+      - costo
+      properties:
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 80
+          examples:
+          - Mantequilla
+        categoria:
+          $ref: '#/components/schemas/CategoriaMateriaPrima'
+        unidad:
+          $ref: '#/components/schemas/UnidadMedida'
+        minimo:
+          type: number
+          minimum: 0
+          examples:
+          - 3000
+        costo:
+          type: number
+          minimum: 0
+          description: Costo unitario en COP.
+          examples:
+          - 8500
+    MateriaPrimaCrear:
+      allOf:
+      - $ref: '#/components/schemas/MateriaPrimaBase'
+      - type: object
+        required:
+        - codigo
+        - stock
+        properties:
+          codigo:
+            type: string
+            pattern: ^MP[0-9]{3,}$
+            examples:
+            - MP006
+          stock:
+            type: number
+            minimum: 0
+            description: Stock inicial.
+    MateriaPrimaActualizar:
+      $ref: '#/components/schemas/MateriaPrimaBase'
+    MateriaPrima:
+      allOf:
+      - $ref: '#/components/schemas/MateriaPrimaBase'
+      - type: object
+        required:
+        - codigo
+        - stock
+        - estado
+        properties:
+          codigo:
+            type: string
+            examples:
+            - MP004
+          stock:
+            type: number
+            minimum: 0
+            examples:
+            - 2000
+          estado:
+            $ref: '#/components/schemas/EstadoStock'
+    Paginacion:
+      type: object
+      required:
+      - pagina
+      - limite
+      - total
+      properties:
+        pagina:
+          type: integer
+        limite:
+          type: integer
+        total:
+          type: integer
+    MateriaPrimaPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/MateriaPrima'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    EntradaCrear:
+      type: object
+      required:
+      - codigo
+      - cantidad
+      - proveedor
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+          pattern: ^MP[0-9]{3,}$
+          examples:
+          - MP004
+        cantidad:
+          type: number
+          exclusiveMinimum: 0
+          description: En la unidad de la materia prima.
+          examples:
+          - 1500
+        proveedor:
+          type: string
+          minLength: 2
+          maxLength: 80
+          examples:
+          - Lácteos del Norte
+        nota:
+          type: string
+          maxLength: 200
+    EntradaResultado:
+      type: object
+      required:
+      - codigo
+      - stock
+      - estado
+      - movimientoId
+      properties:
+        codigo:
+          type: string
+        stock:
+          type: number
+        estado:
+          $ref: '#/components/schemas/EstadoStock'
+        movimientoId:
+          type: integer
+    Movimiento:
+      type: object
+      description: Vista pública del kardex. Solo expone el nombre de quien registró, nunca su id ni su usuario de acceso.
+      required:
+      - id
+      - codigo
+      - tipo
+      - cantidad
+      - creadoEn
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        tipo:
+          type: string
+          enum:
+          - ENTRADA
+          - SALIDA
+          - AJUSTE
+        cantidad:
+          type: number
+          exclusiveMinimum: 0
+        proveedor:
+          type: string
+        registradoPor:
+          type: string
+          examples:
+          - Carlos L.
+        creadoEn:
+          type: string
+          format: date-time
+        nota:
+          type: string
+    MovimientoPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movimiento'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    ProductoBase:
+      type: object
+      required:
+      - nombre
+      - categoria
+      - stock
+      - precio
+      - caducidad
+      properties:
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 80
+          examples:
+          - Pastel de Chocolate
+        categoria:
+          $ref: '#/components/schemas/CategoriaProducto'
+        stock:
+          type: integer
+          minimum: 0
+        precio:
+          type: number
+          minimum: 0
+          description: Precio de venta en COP.
+          examples:
+          - 35000
+        caducidad:
+          type: string
+          format: date
+    ProductoCrear:
+      allOf:
+      - $ref: '#/components/schemas/ProductoBase'
+      - type: object
+        required:
+        - sku
+        properties:
+          sku:
+            type: string
+            pattern: ^PT[0-9]{3,}$
+            examples:
+            - PT005
+    ProductoActualizar:
+      $ref: '#/components/schemas/ProductoBase'
+    Producto:
+      allOf:
+      - $ref: '#/components/schemas/ProductoBase'
+      - type: object
+        required:
+        - sku
+        properties:
+          sku:
+            type: string
+    ProductoPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Producto'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    IngredienteReceta:
+      type: object
+      required:
+      - codigoMateriaPrima
+      - cantidad
+      - unidad
+      properties:
+        codigoMateriaPrima:
+          type: string
+          pattern: ^MP[0-9]{3,}$
+          examples:
+          - MP001
+        cantidad:
+          type: number
+          exclusiveMinimum: 0
+          examples:
+          - 500
+        unidad:
+          $ref: '#/components/schemas/UnidadMedida'
+    RecetaCrear:
+      type: object
+      required:
+      - productoSku
+      - ingredientes
+      additionalProperties: false
+      properties:
+        productoSku:
+          type: string
+          pattern: ^PT[0-9]{3,}$
+          examples:
+          - PT001
+        ingredientes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/IngredienteReceta'
+    Receta:
+      type: object
+      required:
+      - id
+      - productoSku
+      - productoNombre
+      - ingredientes
+      properties:
+        id:
+          type: integer
+        productoSku:
+          type: string
+        productoNombre:
+          type: string
+        ingredientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngredienteRecetaVista'
+    RecetaPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Receta'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    Dashboard:
+      type: object
+      description: 'KPI calculados desde datos reales (DT-10). Sin ventas simuladas: el módulo de ventas está en el roadmap.'
+      required:
+      - valorInventarioInsumos
+      - comprasUltimos30Dias
+      - valorProductosTerminados
+      - totalIngredientesCriticos
+      - productosPorVencer
+      - productosVencidos
+      - ingredientesCriticos
+      - comprasUltimos7Dias
+      - stockPorCategoria
+      - topProductosPorValor
+      properties:
+        valorInventarioInsumos:
+          type: number
+          description: Σ stock × costo de materias primas (COP).
+        comprasUltimos30Dias:
+          type: number
+          description: Σ entradas × costo en 30 días (COP).
+        valorProductosTerminados:
+          type: number
+          description: Σ stock × precio de venta (COP).
+        totalIngredientesCriticos:
+          type: integer
+        productosPorVencer:
+          type: integer
+          description: Vencen en ≤ 3 días y no han vencido.
+        productosVencidos:
+          type: integer
+        ingredientesCriticos:
+          type: array
+          items:
+            type: object
+            required:
+            - codigo
+            - nombre
+            - unidad
+            - stock
+            - minimo
+            - estado
+            properties:
+              codigo:
+                type: string
+              nombre:
+                type: string
+              unidad:
+                type: string
+              stock:
+                type: number
+              minimo:
+                type: number
+              estado:
+                $ref: '#/components/schemas/EstadoStock'
+        comprasUltimos7Dias:
+          type: array
+          items:
+            type: object
+            required:
+            - fecha
+            - total
+            properties:
+              fecha:
+                type: string
+                format: date
+              total:
+                type: number
+        stockPorCategoria:
+          type: array
+          items:
+            type: object
+            required:
+            - categoria
+            - valor
+            properties:
+              categoria:
+                type: string
+              valor:
+                type: number
+        topProductosPorValor:
+          type: array
+          items:
+            type: object
+            required:
+            - sku
+            - nombre
+            - valor
+            properties:
+              sku:
+                type: string
+              nombre:
+                type: string
+              valor:
+                type: number
+    IngredienteRecetaVista:
+      type: object
+      required:
+      - codigoMateriaPrima
+      - nombre
+      - cantidad
+      - unidad
+      properties:
+        codigoMateriaPrima:
+          type: string
+        nombre:
+          type: string
+        cantidad:
+          type: number
+        unidad:
+          $ref: '#/components/schemas/UnidadMedida'
+    RecetaActualizar:
+      type: object
+      required:
+      - ingredientes
+      additionalProperties: false
+      properties:
+        ingredientes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/IngredienteReceta'
+    ProducirSolicitud:
+      type: object
+      required:
+      - unidades
+      additionalProperties: false
+      properties:
+        unidades:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Cantidad de productos terminados a producir (una receta = una unidad).
+        nota:
+          type: string
+          maxLength: 200
+    ProducirResultado:
+      type: object
+      required:
+      - productoSku
+      - stockProducto
+      - consumos
+      properties:
+        productoSku:
+          type: string
+        stockProducto:
+          type: integer
+        consumos:
+          type: array
+          items:
+            type: object
+            required:
+            - codigoMateriaPrima
+            - cantidadConsumida
+            - stockRestante
+            - estado
+            properties:
+              codigoMateriaPrima:
+                type: string
+              cantidadConsumida:
+                type: number
+              stockRestante:
+                type: number
+              estado:
+                $ref: '#/components/schemas/EstadoStock'

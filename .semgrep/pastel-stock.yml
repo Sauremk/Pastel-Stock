@@ -1,0 +1,36 @@
+rules:
+  - id: pastel.hardcoded-password-in-object
+    languages: [javascript]
+    severity: ERROR
+    message: Contraseña en texto plano dentro de un literal de objeto (CWE-798). Mover a servidor, almacenar hash bcrypt/argon2id.
+    metadata: { cwe: "CWE-798", owasp: "A07:2021 Identification and Authentication Failures" }
+    pattern: |
+      { ..., pass: "...", ... }
+  - id: pastel.innerhtml-dynamic
+    languages: [javascript]
+    severity: ERROR
+    message: Asignación a innerHTML con contenido dinámico sin escapar (CWE-79, XSS). Usar textContent/DOM API o escapar.
+    metadata: { cwe: "CWE-79", owasp: "A03:2021 Injection" }
+    patterns:
+      - pattern: $EL.innerHTML = $VAL
+      - pattern-not: $EL.innerHTML = "..."
+  - id: pastel.session-in-localstorage
+    languages: [javascript]
+    severity: WARNING
+    message: Sesión/identidad guardada en localStorage sin firma ni verificación en servidor (CWE-565/CWE-807).
+    metadata: { cwe: "CWE-565" }
+    pattern: localStorage.setItem("usuarioActual", ...)
+  - id: pastel.client-side-auth-compare
+    languages: [javascript]
+    severity: ERROR
+    message: Autenticación comparada en el cliente contra un arreglo en memoria (CWE-603).
+    metadata: { cwe: "CWE-603" }
+    pattern: $ARR.find($U => $U.user === $A && $U.pass === $B)
+  - id: pastel.sql-string-concat
+    languages: [javascript]
+    severity: ERROR
+    message: Consulta SQL construida con plantilla/concatenación (CWE-89). Usar parámetros $1.
+    metadata: { cwe: "CWE-89", owasp: "A03:2021 Injection" }
+    pattern-either:
+      - pattern: $POOL.query(`...${$X}...`)
+      - pattern: $POOL.query("..." + $X + "...")

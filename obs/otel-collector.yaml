@@ -1,0 +1,55 @@
+# OpenTelemetry Collector (ADR-13).
+# La API envía trazas y métricas por OTLP/HTTP (4318). Los logs JSON se leen de los archivos de Docker.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+  filelog:                      # logs JSON del contenedor de la API (driver json-file de Docker)
+    include: [/var/lib/docker/containers/*/*-json.log]
+    include_file_path: false
+    operators:
+      - type: json_parser       # envoltorio de Docker: {"log": "...", "stream": "...", "time": "..."}
+      - type: json_parser       # JSON de la aplicación (pino)
+        parse_from: attributes.log
+        on_error: send
+
+processors:
+  memory_limiter: { check_interval: 1s, limit_mib: 128, spike_limit_mib: 32 }
+  batch: { timeout: 5s }
+  resource/servicio:            # etiqueta los logs recolectados de Docker para filtrarlos en Loki
+    attributes:
+      - { key: service.name, value: pastel-stock, action: upsert }
+  attributes/pii:               # segunda barrera: elimina atributos prohibidos si algún día llegan (Ley 1581)
+    actions:
+      - { key: cedula, action: delete }
+      - { key: telefono, action: delete }
+      - { key: password, action: delete }
+      - { key: token, action: delete }
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls: { insecure: true }
+  prometheus:                   # Prometheus raspa el Collector en :8889
+    endpoint: 0.0.0.0:8889
+    add_metric_suffixes: false  # conserva el nombre http_server_request_duration_* usado en las consultas y el SLO
+  otlphttp/loki:                # Loki 3.x acepta OTLP nativo
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/pii, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [filelog]
+      processors: [memory_limiter, resource/servicio, attributes/pii, batch]
+      exporters: [otlphttp/loki]

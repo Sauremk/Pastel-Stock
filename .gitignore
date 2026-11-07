@@ -1,3 +1,13 @@
 node_modules/
+coverage/
 .env
+.env.*
+!.env.example
 .pgdata/
+.dev-credenciales.txt
+*.log
+.DS_Store
+
+# Archivos locales de desarrollo sin Docker (npm run dev:embedded)
+.pgdata/
+.dev-credenciales.txt

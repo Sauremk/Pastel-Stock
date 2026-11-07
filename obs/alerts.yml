@@ -1,0 +1,24 @@
+groups:
+  - name: pastel-stock-entradas
+    rules:
+      - alert: EntradasLatenciaP95Alta
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{http_route="/api/v1/movimientos/entradas"}[5m]))) > 0.3
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 de POST /movimientos/entradas > 300 ms durante 10 min"
+      - alert: EntradasErroresAltos
+        expr: >-
+          100 * (sum(rate(http_server_request_duration_count{http_route="/api/v1/movimientos/entradas",http_response_status_code=~"5.."}[5m])) or vector(0))
+          / sum(rate(http_server_request_duration_count{http_route="/api/v1/movimientos/entradas"}[5m])) > 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Más de 1 % de respuestas 5xx en entradas durante 5 min"
+          runbook: "docs/runbooks/Runbook_base_de_datos.md"
+      - alert: ApiSinMetricas
+        expr: absent(http_server_request_duration_count) or up{job="otel-collector"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "No llegan métricas de la API (API caída, Collector caído o sin tráfico instrumentado)"

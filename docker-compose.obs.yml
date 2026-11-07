@@ -1,0 +1,105 @@
+# Observabilidad opcional (ADR-13): OpenTelemetry Collector + Prometheus + Loki + Tempo + Grafana.
+# Uso (se SUPERPONE al compose principal):
+#   docker compose -f docker-compose.yml -f docker-compose.obs.yml up -d --build
+# Grafana: http://localhost:3001 (usuario admin; contraseña = GRAFANA_ADMIN_PASSWORD del .env)
+# Límites de memoria ≈ 1,2 GB en total (ver ADR-13): úselo en una máquina con ≥ 4 GB o ajuste los límites.
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pastel-stock}
+      OTEL_SAMPLE_RATIO: ${OTEL_SAMPLE_RATIO:-0.2}
+      # Verificado: con el loader ESM, instrumentation-express aporta http.route (plantilla de ruta) a la métrica
+      # http.server.request.duration; sin él las consultas del SLO por endpoint quedarían vacías.
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+      NODE_OPTIONS: --no-warnings --experimental-loader=@opentelemetry/instrumentation/hook.mjs
+    networks:
+      - frontend
+      - backend
+      - obs
+    logging:               # rotación local de logs del contenedor (ADR-13)
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel/config.yaml"]
+    user: "0:0"            # lee /var/lib/docker/containers (solo lectura) para recolectar los logs de la API
+    volumes:
+      - ./obs/otel-collector.yaml:/etc/otel/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks: [obs]
+    mem_limit: 192m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./obs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./obs/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./obs/slo-rules.yml:/etc/prometheus/slo-rules.yml:ro
+      - prometheus-data:/prometheus
+    networks: [obs]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./obs/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    networks: [obs]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  tempo-init:              # la imagen de Tempo corre como UID 10001: se le da permiso sobre su volumen
+    image: busybox:1.37
+    command: ["chown", "-R", "10001:10001", "/var/tempo"]
+    user: "0:0"
+    volumes:
+      - tempo-data:/var/tempo
+    networks: [obs]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./obs/tempo.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/var/tempo
+    networks: [obs]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    depends_on: [prometheus, loki, tempo]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Defina GRAFANA_ADMIN_PASSWORD en el archivo .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./obs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./obs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks: [obs]
+    mem_limit: 256m
+    restart: unless-stopped
+
+networks:
+  obs: {}
+
+volumes:
+  prometheus-data: {}
+  loki-data: {}
+  tempo-data: {}
+  grafana-data: {}

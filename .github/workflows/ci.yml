@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Mínimo privilegio: el token del workflow solo puede leer el repositorio.
+permissions:
+  contents: read
+
+# Una ejecución por rama: si llega un commit nuevo, se cancela la anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ── Báscula 1: análisis estático ligero ────────────────────────────────────────
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: ESLint (rompe el build con cualquier error)
+        run: npm run lint
+      - name: Contrato OpenAPI válido (Redocly)
+        run: npm run openapi:lint
+
+  # ── Báscula 2: pruebas unitarias, de integración (PostgreSQL real) y de contrato ─
+  test:
+    name: test
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pastel_ci
+          POSTGRES_PASSWORD: ci-ephemeral-db # BD efímera del runner: no es alcanzable desde fuera ni guarda datos reales
+          POSTGRES_DB: pastel_stock_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pastel_ci -d pastel_stock_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://pastel_ci:ci-ephemeral-db@127.0.0.1:5432/pastel_stock_test
+      TEST_DATABASE_URL: postgres://pastel_ci:ci-ephemeral-db@127.0.0.1:5432/pastel_stock_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Secreto JWT efímero para las pruebas (no se versiona)
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Pruebas + cobertura (falla si la cobertura global de líneas < 70 %)
+        run: npm run test:cov
+      - name: Publicar cobertura para el job de análisis
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── Báscula 3: SonarCloud + Quality Gate BLOQUEANTE (ADR-09) ───────────────────
+  analysis:
+    name: analysis
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # secreto cifrado del repositorio; nunca en texto plano
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Sonar necesita el historial completo para "código nuevo" y blame
+      - name: Verificar que el Quality Gate se puede evaluar
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              echo "::error::Falta el secreto SONAR_TOKEN: en main el Quality Gate es obligatorio (ver README, sección CI/CD)."
+              exit 1
+            fi
+            echo "::warning::SONAR_TOKEN no disponible (PR desde un fork): el Quality Gate no se evaluó en este PR."
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage
+      - name: SonarCloud scan + espera del Quality Gate
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_HOST_URL: https://sonarcloud.io
+        # sonar.qualitygate.wait=true (sonar-project.properties) hace que ESTE paso falle
+        # si el Quality Gate no pasa → el job queda en rojo → el PR no se puede fusionar.
+
+  # ── Artefacto verificable: la imagen Docker se construye y arranca (sin publicar) ─
+  build:
+    name: build
+    needs: [lint, test, analysis]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pastel_ci
+          POSTGRES_PASSWORD: ci-ephemeral-db
+          POSTGRES_DB: pastel_stock_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pastel_ci -d pastel_stock_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Construir la imagen (misma que usará el CD; no se publica aquí)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          load: true
+          push: false
+          build-args: APP_VERSION=${{ github.sha }}
+          tags: pastel-stock:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prueba de humo - el contenedor arranca, migra y responde /health
+        run: |
+          JWT_SECRET="$(openssl rand -hex 32)"
+          docker run -d --name pastel-api --network host \
+            -e NODE_ENV=production -e PORT=3000 -e APP_VERSION="${GITHUB_SHA}" \
+            -e DATABASE_URL="postgres://pastel_ci:ci-ephemeral-db@127.0.0.1:5432/pastel_stock_smoke" \
+            -e JWT_SECRET="${JWT_SECRET}" \
+            pastel-stock:ci
+          MAX_ATTEMPTS=12 SLEEP_SECONDS=5 ./scripts/healthcheck.sh http://127.0.0.1:3000
+      - name: Logs del contenedor (si algo falló)
+        if: failure()
+        run: docker logs pastel-api

@@ -1,0 +1,96 @@
+# Pastel Stock — orquestación local (ADR-10). Uso:
+#   cp .env.example .env   # y reemplace TODOS los valores CAMBIAR_*
+#   docker compose up -d --build
+#   docker compose --profile seed run --rm seed     # datos de demostración (usuarios + catálogo)
+# Observabilidad (opcional): docker compose -f docker-compose.yml -f docker-compose.obs.yml up -d
+name: pastel-stock
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pastel_stock}
+      POSTGRES_USER: ${POSTGRES_USER:-pastel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en el archivo .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      target: runtime
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    image: pastel-stock:${APP_VERSION:-dev}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_VERSION: ${APP_VERSION:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pastel-stock}
+      DATABASE_URL: postgres://${POSTGRES_USER:-pastel}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en el archivo .env}@db:5432/${POSTGRES_DB:-pastel_stock}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET (>= 32 caracteres) en el archivo .env}
+    ports:
+      - "3000:3000"
+    networks:
+      - frontend
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Siembra datos de demostración (usuarios admin/operador/contador y catálogo del MVP).
+  # Se ejecuta a demanda; las contraseñas salen del .env, nunca del código.
+  seed:
+    profiles: ["seed"]
+    image: pastel-stock:${APP_VERSION:-dev}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-pastel}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en el archivo .env}@db:5432/${POSTGRES_DB:-pastel_stock}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en el archivo .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Defina SEED_ADMIN_PASSWORD en el archivo .env}
+      SEED_OPERADOR_PASSWORD: ${SEED_OPERADOR_PASSWORD:?Defina SEED_OPERADOR_PASSWORD en el archivo .env}
+      SEED_CONTADOR_PASSWORD: ${SEED_CONTADOR_PASSWORD:?Defina SEED_CONTADOR_PASSWORD en el archivo .env}
+      npm_config_cache: /tmp/.npm
+      npm_config_update_notifier: "false"
+    command: ["npm", "run", "seed", "--silent"]
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  frontend: {}
+  backend:
+    internal: true   # la base de datos no tiene salida ni entrada desde fuera
+
+volumes:
+  pgdata: {}
