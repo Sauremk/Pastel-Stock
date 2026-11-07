@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [Sin publicar] — Incremento II–03
+
+### Añadido
+- Cabecera opcional `Idempotency-Key` en `POST /recetas/{id}/producir`: un reintento con la misma clave y el mismo cuerpo devuelve la respuesta original sin volver a producir (ADR-16, DT-19).
+
+### Cambiado
+- La escala de `stock`, `minimo`, `receta_ingredientes.cantidad` y `movimientos.cantidad` pasa de 3 a 6 decimales (migración 002, DT-18). Los valores ya guardados no cambian.
+
 ## [1.0.0] — 2026-11-07
 
 ### Añadido

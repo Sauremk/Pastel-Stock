@@ -74,6 +74,6 @@ export function crearCasosCatalogo({ pool, inventario }) {
       if (!(await leer().recetas.eliminar(id))) throw noEncontrado('Receta', String(id));
     },
 
-    producir: (id, datos, usuarioId) => producir({ pool, inventario, repos }, id, datos, usuarioId),
+    producir: (id, datos, usuarioId, clave) => producir({ pool, inventario, repos }, id, datos, usuarioId, clave),
   };
 }
