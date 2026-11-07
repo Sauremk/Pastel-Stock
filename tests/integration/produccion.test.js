@@ -16,10 +16,10 @@ test('producir 2 pasteles consume los ingredientes (con conversión unid→docen
   assert.equal(r.body.productoSku, 'PT001');
   assert.equal(r.body.stockProducto, prodAntes + 2);
   const consumo = Object.fromEntries(r.body.consumos.map((c) => [c.codigoMateriaPrima, c.cantidadConsumida]));
-  assert.deepEqual(consumo, { MP001: 1000, MP002: 600, MP003: 0.667, MP004: 400, MP005: 200 }); // 8 unid de huevo = 0,667 docena
+  assert.deepEqual(consumo, { MP001: 1000, MP002: 600, MP003: 0.666667, MP004: 400, MP005: 200 }); // 8 unid de huevo = 0,666667 docena (DT-18)
   const despues = await stocks();
   assert.equal(despues.MP001, antes.MP001 - 1000);
-  assert.ok(Math.abs(despues.MP003 - (antes.MP003 - 0.667)) < 0.0005);
+  assert.ok(Math.abs(despues.MP003 - (antes.MP003 - 0.666667)) < 0.0000005);
   const salidas = await e.api.get('/api/v1/movimientos?limite=100').set(admin);
   assert.equal(salidas.body.datos.filter((m) => m.tipo === 'SALIDA').length, 5);
 });

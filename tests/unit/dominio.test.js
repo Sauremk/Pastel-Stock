@@ -9,7 +9,7 @@ import { abreviarNombre } from '../../src/inventory/adapters/pg/movimientosRepo.
 import { cargarConfig, validarConfig } from '../../src/config.js';
 
 test('convertir: 4 unid de huevo equivalen a 0,333 docena (DT-09)', () => {
-  assert.equal(convertir(4, 'unid', 'docena'), 0.333);
+  assert.equal(convertir(4, 'unid', 'docena'), 0.333333);
   assert.equal(convertir(500, 'g', 'kg'), 0.5);
   assert.equal(convertir(2, 'L', 'ml'), 2000);
   assert.equal(convertir(3, 'docena', 'unid'), 36);

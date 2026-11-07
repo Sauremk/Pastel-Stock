@@ -690,6 +690,8 @@ paths:
       - Catálogo
       operationId: producirReceta
       summary: Registrar una producción
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       x-roles:
       - admin
       - operador
@@ -704,7 +706,17 @@ paths:
               $ref: '#/components/schemas/ProducirSolicitud'
       responses:
         '201':
-          description: Producción registrada.
+          description: Producción registrada (o repetición de una clave ya procesada).
+          headers:
+            Idempotency-Replayed:
+              description: >-
+                true si la respuesta se repite desde una clave ya procesada; false si es la primera vez.
+                Solo aparece cuando se envió Idempotency-Key.
+              schema:
+                type: string
+                enum:
+                - 'true'
+                - 'false'
           content:
             application/json:
               schema:
@@ -727,6 +739,17 @@ components:
       bearerFormat: JWT
       description: Access token JWT (HS256 en desarrollo; vida 15 min). Claims `sub`, `rol`, `iat`, `exp`.
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        Clave opcional (8 a 64 caracteres, letras, números, guion o guion bajo) para reintentar una producción sin
+        duplicarla. Misma clave y mismo cuerpo devuelven la respuesta original con Idempotency-Replayed igual a true;
+        misma clave con otro cuerpo responde 422. Solo se recuerdan las producciones exitosas.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9_-]{8,64}$
     Pagina:
       name: pagina
       in: query

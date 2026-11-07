@@ -4,6 +4,7 @@ import { validacion } from '../../../shared/errors.js';
 import { autorizar } from '../../../identity/adapters/http/middleware.js';
 
 const TODOS = ['admin', 'operador', 'contador'];
+const RE_CLAVE = /^[A-Za-z0-9_-]{8,64}$/;
 const CATEGORIAS_PRODUCTO = ['Pasteles', 'Panes', 'Galletas', 'Tartas', 'Postres'];
 const idRuta = (v) => {
   const n = Number(v);
@@ -42,7 +43,11 @@ export function crearCatalogoRouter({ casos, validar }) {
   r.put('/recetas/:id', autorizar('admin'), validar.cuerpo('RecetaActualizar'), asyncH(async (req, res) => res.json(await casos.reemplazarReceta(idRuta(req.params.id), req.body))));
   r.delete('/recetas/:id', autorizar('admin'), asyncH(async (req, res) => { await casos.eliminarReceta(idRuta(req.params.id)); res.status(204).end(); }));
   r.post('/recetas/:id/producir', autorizar('admin', 'operador'), validar.cuerpo('ProducirSolicitud'), asyncH(async (req, res) => {
-    res.status(201).json(await casos.producir(idRuta(req.params.id), req.body, req.usuario.id));
+    const clave = req.get('Idempotency-Key');
+    if (clave !== undefined && !RE_CLAVE.test(clave)) throw validacion('Cabecera "Idempotency-Key" inválida', 'Debe tener entre 8 y 64 caracteres: letras, números, guion o guion bajo.');
+    const { repetida, cuerpo } = await casos.producir(idRuta(req.params.id), req.body, req.usuario.id, clave);
+    if (clave) res.set('Idempotency-Replayed', String(repetida));
+    res.status(201).json(cuerpo);
   }));
   return r;
 }

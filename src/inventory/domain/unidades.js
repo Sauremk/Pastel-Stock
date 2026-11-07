@@ -15,7 +15,7 @@ export const UNIDADES_VALIDAS = Object.keys(UNIDADES);
 export const sonCompatibles = (a, b) => UNIDADES[a]?.dim !== undefined && UNIDADES[a].dim === UNIDADES[b]?.dim;
 
 /**
- * Convierte una cantidad entre unidades de la misma dimensión (4 unid → 0,333 docena).
+ * Convierte una cantidad entre unidades de la misma dimensión (4 unid → 0,333333 docena).
  * Lanza 422 si las dimensiones no coinciden (no se puede restar gramos de una "docena"): corrige DT-09.
  */
 export function convertir(cantidad, desde, hacia) {
@@ -23,5 +23,5 @@ export function convertir(cantidad, desde, hacia) {
     throw validacion('Unidades incompatibles', `No se puede convertir de "${desde}" a "${hacia}" (dimensiones distintas).`);
   }
   const valor = (cantidad * UNIDADES[desde].f) / UNIDADES[hacia].f;
-  return Math.round(valor * 1000) / 1000; // la base guarda 3 decimales
+  return Math.round(valor * 1e6) / 1e6; // la base guarda 6 decimales (DT-18; antes 3)
 }
