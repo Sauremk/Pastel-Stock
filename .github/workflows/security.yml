@@ -1,0 +1,120 @@
+name: Security
+
+# DevSecOps (ADR-12): secretos, SAST, SCA e imagen/configuración. Falla ante HIGH/CRITICAL.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * 1" # lunes 9:00 a. m. (hora Colombia, UTC-5): aparecen CVE nuevos sin que cambie el código
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secretos (Gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # revisa TODO el historial, no solo el último commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sast:
+    name: SAST (Semgrep + CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Semgrep (reglas del proyecto + OWASP)
+        run: |
+          pip install "semgrep==1.184.0"
+          semgrep scan \
+            --config .semgrep/pastel-stock.yml \
+            --config p/javascript --config p/owasp-top-ten \
+            --severity ERROR --error \
+            --metrics=off \
+            --sarif --output semgrep.sarif \
+            src web
+      - name: Guardar reporte (artefacto privado)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
+          retention-days: 14
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v4
+
+  sca:
+    name: SCA (npm audit + SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Bloquear si hay vulnerabilidades HIGH o CRITICAL en producción
+        run: npm audit --omit=dev --audit-level=high
+      - name: SBOM CycloneDX
+        run: npx --yes @cyclonedx/cyclonedx-npm --omit dev --spec-version 1.5 --output-file sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 30
+
+  image:
+    name: Imagen y configuración (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen local (sin publicar)
+        run: docker build --target runtime -t pastel-stock:scan .
+      - name: Trivy - imagen (vulnerabilidades y secretos)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: pastel-stock:scan
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1" # falla el job ante HIGH/CRITICAL
+          trivyignores: .trivyignore
+          format: sarif
+          output: trivy-image.sarif
+      - name: Trivy - Dockerfile y docker-compose (misconfiguración)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+      - name: Guardar reporte (artefacto privado)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image.sarif
+          retention-days: 14

@@ -1,0 +1,13 @@
+title = "Pastel Stock - reglas Gitleaks"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "pastel-weak-password-literal"
+description = "Contraseña en texto plano en literal (pass: '...' / password: '...')"
+regex = '''(?i)\b(pass|password|passwd|pwd)\b\s*[:=]\s*["'][^"'\s]{3,}["']'''
+tags = ["password", "pastel-stock"]
+
+[allowlist]
+description = "Placeholders documentados y archivos generados"
+paths = ['''\.env\.example$''', '''package-lock\.json$''', '''sbom\.cdx\.json$''']
