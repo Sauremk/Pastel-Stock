@@ -21,6 +21,7 @@ Cada ADR sigue la plantilla de 5 campos (Título, Estado, Contexto, Decisión, C
 | [ADR-15](ADR-15-deuda-residual-y-roadmap.md) | Priorización de la deuda residual y roadmap técnico de seis meses con disparadores | Aceptado |
 | [ADR-16](ADR-16-idempotencia-y-precision-de-cantidades.md) | Idempotencia opcional en la producción y precisión de 6 decimales (incremento II–03) | Aceptado |
 | [ADR-17](ADR-17-ventas-costeo-y-kardex-de-producto.md) | Contexto Ventas, costeo de recetas y kardex de producto terminado (v1.1) | Aceptado |
+| [ADR-18](ADR-18-pwa-sin-servidor.md) | Versión instalable sin servidor (PWA) que reutiliza la interfaz y las reglas de negocio (v1.2) | Aceptado |
 
 ## Plantilla
 

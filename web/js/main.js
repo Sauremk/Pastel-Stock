@@ -1,6 +1,7 @@
 // Punto de entrada: tema, sesión, navegación por hash y montaje de vistas.
 import { crearAuth } from './auth.js';
 import { crearApi } from './api.js';
+import { modoLocal } from './modo.js';
 import { h, reemplazarHijos, toast } from './ui.js';
 import { ETIQUETAS_ROL } from './catalogos.js';
 import { validarCredenciales } from './validacion.js';
@@ -40,8 +41,10 @@ function aplicarTema(tema) {
 }
 
 // ---------------------------------------------------------------- Estado de aplicación
-const auth = crearAuth();
-const api = crearApi({ auth, alSesionExpirada: () => mostrarLogin('Tu sesión venció. Inicia sesión de nuevo.') });
+// En la app sin servidor (PWA) la API responde dentro del navegador y la sesión se conserva al cerrar la app.
+const local = modoLocal ? { fetchImpl: modoLocal.fetch, storage: modoLocal.storage } : {};
+const auth = crearAuth(local);
+const api = crearApi({ auth, ...local, alSesionExpirada: () => mostrarLogin('Tu sesión venció. Inicia sesión de nuevo.') });
 const ctx = { api, auth, refrescarAlertas: () => refrescarAlertas() };
 let vistaActual = null;
 let nombreVistaActual = null;
@@ -187,6 +190,7 @@ function configurarEventos() {
 async function iniciar() {
   aplicarTema(leerTema());
   configurarEventos();
+  modoLocal?.montar({ api, auth, ctx, cerrarSesion: () => { auth.cerrarSesion(); mostrarLogin(); } });
   if (await auth.restaurar()) mostrarApp(); else mostrarLogin();
 }
 

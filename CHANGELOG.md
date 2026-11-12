@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.2.0] — App instalable sin servidor (2026-11-12)
+
+### Añadido
+- **PWA** (ADR-18): `npm run build:pwa` genera `dist-pwa/`, una versión que se abre con un enlace, se instala en el celular y funciona sin internet. Usa la misma interfaz y las mismas reglas de negocio; la API la responde el navegador (`pwa/servidor.js`) y los datos quedan en el dispositivo.
+- «Datos y cuenta» (solo PWA): descargar y restaurar respaldo, cambiar contraseña y reiniciar los datos de demostración; botón «Instalar la app».
+- Exportación PDF y Excel dentro del navegador, con el mismo formato que el servidor.
+- Workflow `pages` para publicar en GitHub Pages; 6 pruebas `tests/pwa/` que verifican las mismas cifras que el servidor.
+- Ícono de la app (cupcake) en SVG y PNG, incluido el maskable para Android.
+
+### Cambiado
+- Los datos demo (`src/db/datosDemo.js`) y las definiciones de reportes (`src/reporting/domain/definicionesReporte.js`) se separaron para compartirlos entre el servidor y la PWA.
+- `index.html` usa rutas relativas (funciona servido desde una subcarpeta).
+
 ## [1.1.0] — Aplicativo mejorado (2026-11-12)
 
 ### Añadido
