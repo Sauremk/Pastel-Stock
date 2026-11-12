@@ -2,6 +2,33 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.4.0] — Más fácil para quien empieza (2026-11-12)
+
+### Cambiado
+- **Menú de 5 opciones** en palabras de todos los días: Inicio, Vender, Hornear, Inventario y Avisos. Las demás quedan en «Más» (Ganancias y «¿Cómo se usa?»).
+- **Barra inferior en el celular**, como en las apps de mensajería: Inicio, Vender, Hornear, Inventario y Más.
+- **Inventario en un solo lugar**, con tres pestañas: Ingredientes, Productos y Entradas.
+- **Inicio:**
+  - botones grandes de «¿Qué quieres hacer?»: Registrar una venta, Hornear, Llegaron ingredientes y Contar el inventario. Cada uno lleva directo a la acción (`#/ventas/nueva`, `#/recetas/hornear`, `#/movimientos/entrada`);
+  - los gráficos y detalles quedan plegados en «Ver más detalles»;
+  - guía de bienvenida la primera vez.
+- **Lenguaje simple:**
+  - se reemplazaron los términos técnicos: materias primas → ingredientes, kardex → historial, stock mínimo → «avisar bajo», margen → ganancia, ROI → rendimiento;
+  - los estados se llaman Suficiente / Poco / Muy poco y Fresco / Vence pronto / Vencido;
+  - el SKU ya no se muestra.
+- **Botones con texto** («Contar», «Historial», «Editar») en lugar de íconos solos. «Eliminar» queda dentro de «Editar», para evitar borrados por error.
+- **Códigos automáticos** al crear ingredientes y productos (MP006, PT005).
+- **Hornear:** una tarjeta por producto con un solo botón grande y los ingredientes desplegables.
+- **Vender:** preguntas en lugar de etiquetas («¿Qué vendiste?», «¿Cuántos?»). Quien vende solo ve el «Total a cobrar»; costos y ganancia, solo el administrador y el contador.
+- **Accesibilidad:**
+  - letra base de 16 px;
+  - botones y campos de 46 a 48 px de alto;
+  - en el celular, los mensajes aparecen arriba para no tapar los botones.
+
+### Verificado
+- axe-core: 0 violaciones WCAG 2 A/AA en 64 combinaciones (8 pantallas × 2 temas × 2 tamaños × 2 roles).
+- 174 pruebas y 7 E2E; la nueva E2E cubre la guía y el atajo de venta.
+
 ## [1.3.0] — Tablero «obrador en vivo» (2026-11-12)
 
 ### Cambiado

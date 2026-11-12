@@ -14,6 +14,7 @@ import { crearVista as vistaMovimientos } from './views/movimientos.js';
 import { crearVista as vistaVentas } from './views/ventas.js';
 import { crearVista as vistaAlertas } from './views/alertas.js';
 import { crearVista as vistaRentabilidad } from './views/rentabilidad.js';
+import { mostrarAyuda } from './views/ayuda.js';
 
 const VISTAS = {
   dashboard: vistaDashboard,
@@ -89,7 +90,7 @@ async function refrescarAlertas() {
       n.textContent = total > 99 ? '99+' : String(total);
       n.hidden = total === 0;
     });
-    $('btn-alertas-top').setAttribute('aria-label', total ? `Ver alertas (${total})` : 'Ver alertas');
+    $('btn-alertas-top').setAttribute('aria-label', total ? `Ver avisos (${total})` : 'Ver avisos');
   } catch { /* la insignia es informativa: si falla, la vista de alertas mostrará el error */ }
 }
 
@@ -97,49 +98,62 @@ async function refrescarAlertas() {
 function abrirMenu(abrir) {
   document.body.classList.toggle('menu-abierto', abrir);
   $('velo-menu').hidden = !abrir;
-  $('btn-menu').setAttribute('aria-expanded', String(abrir));
+  $('btn-mas').setAttribute('aria-expanded', String(abrir));
   if (abrir) document.querySelector('.sidebar .nav-item[aria-current="page"], .sidebar .nav-item')?.focus();
 }
 
-// ---------------------------------------------------------------- Navegación (hash: #/materias)
-function vistaDeHash() {
-  const nombre = location.hash.replace(/^#\/?/, '');
-  if (!Object.hasOwn(VISTAS, nombre)) return VISTA_INICIAL;
-  return PERMISO_VISTA[nombre] && !auth.puede(PERMISO_VISTA[nombre]) ? VISTA_INICIAL : nombre;
+// ---------------------------------------------------------------- Navegación (hash: #/materias o #/ventas/nueva)
+// La segunda parte es una ACCIÓN que la vista ejecuta al abrir (atajos del Inicio: vender, hornear, registrar entrada).
+function rutaDeHash() {
+  const [nombre = '', accion = null] = location.hash.replace(/^#\/?/, '').split('/');
+  if (!Object.hasOwn(VISTAS, nombre)) return { nombre: VISTA_INICIAL, accion: null };
+  if (PERMISO_VISTA[nombre] && !auth.puede(PERMISO_VISTA[nombre])) return { nombre: VISTA_INICIAL, accion: null };
+  return { nombre, accion };
+}
+
+/** Ejecuta la acción del atajo y deja la dirección limpia (#/ventas) para que "Atrás" y recargar no la repitan. */
+function ejecutarAccion(vista, nombre, accion) {
+  if (!accion) return;
+  history.replaceState(null, '', `#/${nombre}`);
+  vista.accion?.(accion);
 }
 
 async function navegar() {
   if (!auth.estaAutenticado()) return;
-  const nombre = vistaDeHash();
-  if (nombre === nombreVistaActual) return;
+  const { nombre, accion } = rutaDeHash();
+  if (nombre === nombreVistaActual) { ejecutarAccion(vistaActual, nombre, accion); return; }
   const marca = ++marcaNavegacion;
   vistaActual?.destruir?.();
 
   const vista = VISTAS[nombre](ctx);
   vistaActual = vista;
   nombreVistaActual = nombre;
-  document.querySelectorAll('.nav-item').forEach((b) => {
-    if (b.dataset.vista === nombre) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  document.querySelectorAll('.nav-item[data-vista]').forEach((b) => {
+    const activa = (b.dataset.activaEn ?? b.dataset.vista).split(',').includes(nombre);
+    if (activa) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   reemplazarHijos($('contenido'), vista.el);
   document.title = `${vista.titulo} · Pastel Stock`;
   $('contenido').scrollTo?.(0, 0);
   window.scrollTo(0, 0);
   await vista.cargar();
-  if (marca === marcaNavegacion) vista.el.querySelector('h1')?.focus({ preventScroll: true });
+  if (marca !== marcaNavegacion) return;
+  if (accion) ejecutarAccion(vista, nombre, accion);
+  else vista.el.querySelector('h1')?.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------- Eventos de la interfaz
 function configurarEventos() {
-  document.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.nav-item[data-vista]').forEach((b) => b.addEventListener('click', () => {
     abrirMenu(false);
     const destino = `#/${b.dataset.vista}`;
     if (location.hash === destino) { nombreVistaActual = null; navegar(); } else location.hash = destino;
   }));
   window.addEventListener('hashchange', navegar);
-  $('btn-menu').addEventListener('click', () => abrirMenu(!document.body.classList.contains('menu-abierto')));
+  $('btn-mas').addEventListener('click', () => abrirMenu(!document.body.classList.contains('menu-abierto')));
+  $('btn-ayuda').addEventListener('click', () => { abrirMenu(false); mostrarAyuda(); });
   $('velo-menu').addEventListener('click', () => abrirMenu(false));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('menu-abierto')) { abrirMenu(false); $('btn-menu').focus(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('menu-abierto')) { abrirMenu(false); $('btn-mas').focus(); } });
   $('btn-alertas-top').addEventListener('click', () => { location.hash = '#/alertas'; });
   window.matchMedia('(min-width: 961px)').addEventListener?.('change', (m) => { if (m.matches) abrirMenu(false); });
 

@@ -12,16 +12,17 @@ export function crearVista(ctx) {
   const { api, auth } = ctx;
   const puedeEditar = auth.puede('catalogo');
   const puedeProducir = auth.puede('producir');
+  const puedeVerCostos = auth.puede('rentabilidad') || puedeEditar;
   let marcaCarga = 0;
   let recetas = [];
   let costeoPorId = new Map();
 
   const zona = h('div', {});
-  const botonNueva = puedeEditar ? h('button', { type: 'button', class: 'btn', onClick: () => abrirFormulario(null) }, '+ Nueva receta') : null;
+  const botonNueva = puedeEditar ? h('button', { type: 'button', class: 'btn', onClick: () => abrirFormulario(null) }, '＋ Nueva receta') : null;
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-recetas' },
-    encabezadoVista('Recetas / fichas técnicas', 'Costo por unidad calculado con el precio actual de cada insumo.'),
+    encabezadoVista('Hornear', 'Elige qué horneaste. Los ingredientes se descuentan solos según la receta.'),
     h('div', { class: 'panel' },
-      h('div', { class: 'panel-header' }, h('div', {}), h('div', { class: 'panel-actions' }, botonesExportar(ctx, 'recetas'), botonNueva)),
+      puedeEditar ? h('div', { class: 'panel-header' }, h('div', {}), h('div', { class: 'panel-actions' }, botonesExportar(ctx, 'recetas'), botonNueva)) : null,
       zona));
   el.querySelector('h1').id = 'titulo-recetas';
 
@@ -44,26 +45,26 @@ export function crearVista(ctx) {
 
   function pintar() {
     if (recetas.length === 0) {
-      reemplazarHijos(zona, vacio('Aún no hay recetas. Crea la primera para poder registrar producciones.', '📖'));
+      reemplazarHijos(zona, vacio(puedeEditar ? 'Aún no hay recetas. Toca «Nueva receta» para crear la primera.' : 'Aún no hay recetas. Pídele al administrador que cree la primera.', '📖'));
       return;
     }
-    reemplazarHijos(zona, ...recetas.map((r) => h('article', { class: 'receta-card', 'aria-label': `Receta de ${r.productoNombre}` },
-      h('h3', {}, `🎂 ${r.productoNombre} `, h('span', { class: 'solo-lectura' }, `(${r.productoSku})`),
-        typeof costeoPorId.get(r.id)?.margenPorcentaje === 'number' ? insignia(`margen ${formatoNumero(costeoPorId.get(r.id).margenPorcentaje)} %`, costeoPorId.get(r.id).margenPorcentaje < 40 ? 'por-vencer' : 'vigente') : null),
-      costeoPorId.get(r.id) ? h('p', { class: 'receta-costo' },
-        h('span', {}, 'Costo por unidad: ', h('strong', {}, formatoCOP(costeoPorId.get(r.id).costoUnitario))),
-        h('span', {}, 'Precio: ', h('strong', {}, formatoCOP(costeoPorId.get(r.id).precioVenta))),
-        h('span', {}, 'Margen: ', h('strong', {}, formatoCOP(costeoPorId.get(r.id).margenUnitario)))) : null,
-      h('div', { class: 'acciones' },
-        puedeProducir ? h('button', { type: 'button', class: 'btn-icon producir', onClick: () => abrirProduccion(r) }, '🏭 Producir') : null,
-        puedeEditar ? h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar receta de ${r.productoNombre}`, onClick: () => abrirFormulario(r) }, '✏️ Editar') : null,
-        puedeEditar ? h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar receta de ${r.productoNombre}`, onClick: () => eliminar(r) }, '🗑️ Eliminar') : null),
-      tabla({
-        descripcion: `Ingredientes de ${r.productoNombre}`,
-        columnas: [{ titulo: 'Código' }, { titulo: 'Ingrediente' }, { titulo: 'Cantidad', num: true }, { titulo: 'Unidad' }, { titulo: 'Costo', num: true }],
-        filas: r.ingredientes.map((i) => ({ celdas: [i.codigoMateriaPrima, i.nombre, formatoNumero(i.cantidad), i.unidad,
-          formatoCOP(costeoPorId.get(r.id)?.ingredientes.find((c) => c.codigoMateriaPrima === i.codigoMateriaPrima)?.costo ?? 0)] })),
-      }))));
+    // Una tarjeta grande por producto con UN botón principal: «Hornear». Los ingredientes se ven al desplegar.
+    reemplazarHijos(zona, h('div', { class: 'recetas-grid' }, ...recetas.map((r) => {
+      const c = costeoPorId.get(r.id);
+      return h('article', { class: 'receta-card', 'aria-label': `Receta de ${r.productoNombre}` },
+        h('h3', {}, `🎂 ${r.productoNombre}`),
+        c && puedeVerCostos ? h('p', { class: 'receta-costo' },
+          h('span', {}, 'Hacer uno cuesta ', h('strong', {}, formatoCOP(c.costoUnitario))),
+          h('span', {}, 'se vende a ', h('strong', {}, formatoCOP(c.precioVenta))),
+          typeof c.margenPorcentaje === 'number' ? insignia(`ganas ${formatoNumero(c.margenPorcentaje)} %`, c.margenPorcentaje < 40 ? 'por-vencer' : 'vigente') : null) : null,
+        puedeProducir ? h('button', { type: 'button', class: 'btn btn-grande btn-block', onClick: () => abrirProduccion(r) }, `🧁 Hornear ${r.productoNombre}`) : null,
+        h('details', { class: 'receta-detalle' },
+          h('summary', {}, `Ver ingredientes (${r.ingredientes.length})`),
+          h('ul', { class: 'receta-ingredientes' }, ...r.ingredientes.map((i) => h('li', {}, h('span', {}, i.nombre), h('strong', {}, `${formatoNumero(i.cantidad)} ${i.unidad}`))))),
+        puedeEditar ? h('div', { class: 'acciones' },
+          h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar receta de ${r.productoNombre}`, onClick: () => abrirFormulario(r) }, '✏️ Editar receta'),
+          h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar receta de ${r.productoNombre}`, onClick: () => eliminar(r) }, '🗑️ Eliminar')) : null);
+    })));
   }
 
   async function eliminar(r) {
@@ -82,18 +83,18 @@ export function crearVista(ctx) {
     const resultado = h('div', {});
     // Una clave por intención: si la red falla y la persona reintenta, el servidor no vuelve a producir (ADR-16).
     let clave = nuevaClaveIdempotencia();
-    const unidades = campo({ id: idCampo('prod-unidades'), etiqueta: 'Unidades a producir', requerido: true,
-      ayuda: 'Cada unidad consume una vez los ingredientes de la receta.', control: h('input', { type: 'number', min: '1', max: '1000', step: '1', inputmode: 'numeric', value: '1' }) });
+    const unidades = campo({ id: idCampo('prod-unidades'), etiqueta: '¿Cuántas unidades hiciste?', requerido: true,
+      ayuda: 'Se descontarán los ingredientes de esa cantidad.', control: h('input', { type: 'number', min: '1', max: '1000', step: '1', inputmode: 'numeric', value: '1' }) });
     const nota = campo({ id: idCampo('prod-nota'), etiqueta: 'Nota (opcional)', control: h('textarea', { maxlength: '200', rows: '2' }) });
-    const caducidad = campo({ id: idCampo('prod-cad'), etiqueta: 'Caducidad del lote (opcional)', ayuda: 'Si la indicas, se actualiza la fecha de caducidad del producto.',
+    const caducidad = campo({ id: idCampo('prod-cad'), etiqueta: '¿Hasta cuándo dura? (opcional)', ayuda: 'Así te avisamos antes de que se venza.',
       control: h('input', { type: 'date', min: hoyISO() }) });
-    const enviar = h('button', { type: 'submit', class: 'btn' }, 'Registrar producción');
+    const enviar = h('button', { type: 'submit', class: 'btn' }, '✓ Guardar horneado');
     const form = h('form', { novalidate: true },
       aviso.el,
-      h('p', { class: 'ayuda' }, `Producto: ${r.productoNombre} (${r.productoSku})`),
+
       h('div', { class: 'form-row' }, unidades.grupo, caducidad.grupo), nota.grupo,
       h('div', { class: 'form-acciones' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => modal.cerrar() }, 'Cerrar'), enviar));
-    const modal = abrirModal({ titulo: `Producir ${r.productoNombre}`, contenido: h('div', {}, form, resultado) });
+    const modal = abrirModal({ titulo: `Hornear ${r.productoNombre}`, contenido: h('div', {}, form, resultado) });
 
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -106,7 +107,7 @@ export function crearVista(ctx) {
         const res = await conBotonOcupado(enviar, () => api.post(`/recetas/${r.id}/producir`, datos, { cabeceras: { 'Idempotency-Key': clave } }), 'Produciendo…');
         clave = nuevaClaveIdempotencia(); // la siguiente producción es otra intención
         reemplazarHijos(resultado,
-          h('div', { class: 'banner-ok', role: 'status' }, `Producción registrada. Stock de ${r.productoNombre}: ${formatoNumero(res.stockProducto)} unidades.`
+          h('div', { class: 'banner-ok', role: 'status' }, `¡Listo! Ahora hay ${formatoNumero(res.stockProducto)} ${r.productoNombre} para vender.`
             + (res.costoLote !== undefined ? ` Costo del lote ${formatoCOP(res.costoLote)} (${formatoCOP(res.costoUnitarioLote)} c/u).` : '')),
           tabla({
             descripcion: 'Ingredientes consumidos',
@@ -214,5 +215,11 @@ export function crearVista(ctx) {
     });
   }
 
-  return { el, titulo: 'Recetas', cargar, destruir() { marcaCarga++; } };
+  return {
+    el, titulo: 'Hornear', cargar,
+    accion(a) {
+      if (a !== 'hornear' || !puedeProducir) return;
+      if (recetas.length === 1) abrirProduccion(recetas[0]);
+      else zona.querySelector('.btn-grande')?.focus();
+    }, destruir() { marcaCarga++; } };
 }

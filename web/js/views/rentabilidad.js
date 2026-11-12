@@ -10,7 +10,7 @@ export function crearVista(ctx) {
   let marcaCarga = 0;
   const cuerpo = h('div', {});
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-rentabilidad' },
-    encabezadoVista('Costos y márgenes', 'Costo estándar con los precios actuales de los insumos y lo vendido en los últimos 30 días.',
+    encabezadoVista('Ganancias', 'Cuánto te deja cada producto y lo que vendiste en los últimos 30 días.',
       h('div', { class: 'panel-actions' }, botonesExportar(ctx, 'ventas'))),
     cuerpo);
   el.querySelector('h1').id = 'titulo-rentabilidad';
@@ -59,5 +59,5 @@ export function crearVista(ctx) {
     } catch (e) { if (marca === marcaCarga) reemplazarHijos(cuerpo, bannerError(e, cargar)); }
   }
 
-  return { el, titulo: 'Costos y márgenes', cargar, destruir() { marcaCarga++; } };
+  return { el, titulo: 'Ganancias', cargar, destruir() { marcaCarga++; } };
 }
