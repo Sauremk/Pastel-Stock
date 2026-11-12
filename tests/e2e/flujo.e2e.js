@@ -24,7 +24,7 @@ async function abrir(usuario, { ancho = 1366 } = {}) {
   await pagina.fill('#login-user', usuario);
   await pagina.fill('#login-pass', CLAVES[usuario]);
   await pagina.click('#login-submit');
-  await pagina.getByRole('heading', { name: 'Tablero principal' }).waitFor();
+  await pagina.getByRole('heading', { level: 1, name: /^Buen(os|as) (días|tardes|noches)/ }).waitFor();
   return { pagina, errores };
 }
 // Consultas de verificación por HTTP real contra el mismo servidor que usa el navegador.
@@ -127,6 +127,6 @@ test('operador: no ve Costos y márgenes en el menú ni entra por URL', async ()
   const { pagina } = await abrir('operador');
   assert.equal(await pagina.getByRole('button', { name: 'Costos y márgenes' }).isVisible(), false);
   await pagina.goto(`${base}/#/rentabilidad`);
-  await pagina.getByRole('heading', { name: 'Tablero principal' }).waitFor();
+  await pagina.getByRole('heading', { level: 1, name: /^Buen(os|as) (días|tardes|noches)/ }).waitFor();
   await pagina.close();
 });

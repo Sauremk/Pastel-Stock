@@ -2,6 +2,29 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.3.0] — Tablero «obrador en vivo» (2026-11-12)
+
+### Cambiado
+- **Tablero rediseñado** con los mismos datos reales:
+  - portada con aurora animada, chispas, saludo según la hora y reloj;
+  - ventas de 30 días que cuentan al aparecer, con curva de 7 días que se dibuja;
+  - chips de margen, ventas, ticket promedio y mejor día;
+  - anillos de progreso para margen, ROI, salud del inventario y frescura;
+  - tarjetas con brillo que sigue al puntero;
+  - podio de más vendidos con medallas y barras animadas;
+  - «Pulso de la pastelería» (ventas y movimientos recientes);
+  - barras de insumos bajo mínimo y gráficos con degradados;
+  - esqueleto de carga.
+- Con «reducir movimiento» activado en el sistema, todo aparece sin animación.
+- `GET /movimientos` incluye `nombre` y `unidad` de la materia prima.
+
+### Corregido
+- `h()` no aplicaba propiedades CSS personalizadas (`--x`) en el atributo `style`.
+
+### Verificado
+- axe-core: 0 violaciones WCAG 2 A/AA en el tablero (claro y oscuro, 1440 px y 390 px).
+- 174 pruebas y 6 E2E en verde.
+
 ## [1.2.0] — App instalable sin servidor (2026-11-12)
 
 ### Añadido

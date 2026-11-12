@@ -1,193 +1,369 @@
-// Tablero: KPI y gráficos calculados desde datos reales. v1.1: ventas, margen y ROI salen de las ventas registradas.
-import { h, reemplazarHijos, cargando, bannerError, vacio, tabla, insignia, encabezadoVista } from '../ui.js';
-import { formatoCOP, formatoCOPCorto, formatoNumero, infoEstado, formatoFecha } from '../format.js';
+// Tablero v1.3 — "obrador en vivo". Mismos datos reales que v1.1 (GET /reportes/dashboard), presentados con:
+// portada animada con saludo y reloj, cifras que cuentan, anillos de progreso, curva de ventas que se dibuja,
+// podio de más vendidos, pulso de actividad reciente y barras de insumos. Todo respeta prefers-reduced-motion.
+import { h, reemplazarHijos, bannerError } from '../ui.js';
+import { formatoCOP, formatoCOPCorto, formatoNumero, formatoFecha } from '../format.js';
 
-const PALETA = ['#8A3B12', '#B8336A', '#1F7A4D', '#D08A2E', '#2E5AAC', '#6B4A36'];
-const porcentaje = (v) => (v === null || v === undefined ? '—' : `${formatoNumero(v)} %`);
+const SVG = 'http://www.w3.org/2000/svg';
+const s = (tag, attrs = {}, ...hijos) => {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) el.setAttribute(k, String(v));
+  hijos.forEach((x) => x && el.appendChild(x));
+  return el;
+};
+const sinMovimiento = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const css = (nombre, defecto) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || defecto;
+const esOscuro = () => document.documentElement.dataset.theme === 'dark';
 
-function colorTexto() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--color-texto').trim() || '#1F2937';
+// ------------------------------------------------------------------ animaciones
+const facilitar = (t) => (t === 1 ? 1 : 1 - 2 ** (-10 * t)); // easeOutExpo
+
+/** Número que cuenta desde 0 hasta su valor. El texto final queda puesto siempre (lectores de pantalla y sin animación). */
+function contador(valor, formato, { duracion = 1400, retraso = 0 } = {}) {
+  const el = h('span', { class: 'db-num' }, formato(valor));
+  if (sinMovimiento() || !Number.isFinite(valor) || valor === 0) return el;
+  el.textContent = formato(0);
+  setTimeout(() => {
+    const inicio = performance.now();
+    const paso = (t) => {
+      const p = Math.min(1, (t - inicio) / duracion);
+      el.textContent = formato(valor * facilitar(p));
+      if (p < 1 && el.isConnected) requestAnimationFrame(paso); else el.textContent = formato(valor);
+    };
+    requestAnimationFrame(paso);
+  }, retraso);
+  return el;
 }
-function colorBorde() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--color-borde').trim() || '#E5E7EB';
+
+/** Anillo de progreso SVG (0–100). `tope` permite mostrar valores > 100 (ROI) llenando el anillo completo. */
+function anillo({ porcentaje, etiqueta, valorTexto, color, retraso = 0, ayuda, centro }) {
+  const r = 46; const largo = 2 * Math.PI * r;
+  const lleno = Math.max(0, Math.min(100, porcentaje ?? 0));
+  const arco = s('circle', { cx: 60, cy: 60, r, fill: 'none', stroke: `url(#${color})`, 'stroke-width': 11, 'stroke-linecap': 'round',
+    'stroke-dasharray': largo, 'stroke-dashoffset': sinMovimiento() ? largo * (1 - lleno / 100) : largo, transform: 'rotate(-90 60 60)', class: 'db-anillo-arco' });
+  const svg = s('svg', { viewBox: '0 0 120 120', class: 'db-anillo-svg', 'aria-hidden': 'true' },
+    s('circle', { cx: 60, cy: 60, r, fill: 'none', class: 'db-anillo-pista', 'stroke-width': 11 }), arco);
+  if (!sinMovimiento()) setTimeout(() => requestAnimationFrame(() => arco.setAttribute('stroke-dashoffset', largo * (1 - lleno / 100))), 120 + retraso);
+  return h('div', { class: 'db-anillo db-entra', style: { '--i': String(retraso / 90) }, role: 'group', 'aria-label': `${etiqueta}: ${valorTexto}` },
+    h('div', { class: 'db-anillo-grafico' }, svg,
+      h('div', { class: 'db-anillo-centro', 'aria-hidden': 'true' }, porcentaje === null ? h('span', { class: 'db-num' }, '—')
+        : contador(centro ?? porcentaje, (v) => `${formatoNumero(Math.round(v * (centro > 99 ? 1 : 10)) / (centro > 99 ? 1 : 10))}%`, { retraso }))),
+    h('div', { class: 'db-anillo-texto', 'aria-hidden': 'true' }, h('strong', {}, etiqueta), h('span', {}, ayuda)));
 }
 
-function kpi({ icono, titulo, valor, nota, clase, enlace }) {
-  return h(enlace ? 'a' : 'div', { class: ['kpi', clase], href: enlace, style: enlace ? { textDecoration: 'none', color: 'inherit' } : null },
-    h('div', { class: 'icono', 'aria-hidden': 'true' }, icono),
-    h('h3', {}, titulo),
-    h('div', { class: 'valor' }, valor),
-    nota ? h('div', { class: 'nota' }, nota) : null);
+/** Curva de ventas de 7 días (área + línea) que se dibuja al aparecer. */
+function curvaVentas(dias) {
+  const w = 320; const alto = 96; const pad = 6;
+  const max = Math.max(1, ...dias.map((d) => d.total));
+  const pts = dias.map((d, i) => [pad + (i * (w - 2 * pad)) / Math.max(1, dias.length - 1), alto - pad - (d.total / max) * (alto - 2 * pad - 8)]);
+  // Curva suave (Catmull-Rom → Bézier)
+  const linea = pts.reduce((acc, [x, y], i, a) => {
+    if (i === 0) return `M${x},${y}`;
+    const [x0, y0] = a[i - 2] ?? a[i - 1]; const [x1, y1] = a[i - 1]; const [x3, y3] = a[i + 1] ?? [x, y];
+    return `${acc} C${x1 + (x - x0) / 6},${y1 + (y - y0) / 6} ${x - (x3 - x1) / 6},${y - (y3 - y1) / 6} ${x},${y}`;
+  }, '');
+  const area = `${linea} L${pts.at(-1)[0]},${alto} L${pts[0][0]},${alto} Z`;
+  const trazo = s('path', { d: linea, class: 'db-curva-linea', fill: 'none', 'stroke-width': 3, 'stroke-linecap': 'round', pathLength: 1 });
+  const ultimo = pts.at(-1);
+  return s('svg', { viewBox: `0 0 ${w} ${alto}`, class: 'db-curva', preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+    s('defs', {}, s('linearGradient', { id: 'db-curva-relleno', x1: 0, y1: 0, x2: 0, y2: 1 },
+      s('stop', { offset: '0', 'stop-color': '#F7A8C8', 'stop-opacity': '.55' }), s('stop', { offset: '1', 'stop-color': '#F7A8C8', 'stop-opacity': '0' }))),
+    s('path', { d: area, fill: 'url(#db-curva-relleno)', class: 'db-curva-area' }),
+    trazo,
+    s('circle', { cx: ultimo[0], cy: ultimo[1], r: 5, class: 'db-curva-punto' }));
 }
 
-function tarjetaGrafico(titulo, idCanvas, descripcion) {
-  const canvas = h('canvas', { id: idCanvas, role: 'img', 'aria-label': descripcion });
-  return { canvas, el: h('div', { class: 'chart-container' }, h('h3', {}, titulo), h('div', { class: 'chart-box' }, canvas)) };
+/** Brillo que sigue al puntero sobre las tarjetas (efecto "foco"). */
+function seguirPuntero(contenedor) {
+  contenedor.addEventListener('pointermove', (e) => {
+    const t = e.target.closest?.('.db-brillo');
+    if (!t) return;
+    const r = t.getBoundingClientRect();
+    t.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    t.style.setProperty('--my', `${e.clientY - r.top}px`);
+  });
 }
 
+// ------------------------------------------------------------------ utilidades de texto
+function saludo(fecha = new Date()) {
+  const hora = fecha.getHours();
+  return hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+}
+const horaTexto = (f = new Date()) => f.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+function haceCuanto(iso) {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.round(min / 60);
+  if (horas < 24) return `hace ${horas} h`;
+  const dias = Math.round(horas / 24);
+  return dias === 1 ? 'ayer' : `hace ${dias} días`;
+}
+const pct = (parte, total) => (total > 0 ? Math.round((parte / total) * 1000) / 10 : null);
+
+// ------------------------------------------------------------------ vista
 export function crearVista(ctx) {
-  const { api } = ctx;
-  const cuerpo = h('div', {});
-  const hoy = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
-  const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-dashboard' },
-    encabezadoVista('Tablero principal', h('div', { class: 'fecha' }, `📅 ${hoy}`)),
-    cuerpo);
-  el.querySelector('h1').id = 'titulo-dashboard';
+  const { api, auth } = ctx;
+  const cuerpo = h('div', { class: 'db' });
+  const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-dashboard' }, cuerpo);
+  seguirPuntero(cuerpo);
 
   let graficos = [];
   let datos = null;
   let ultimaCarga = 0;
+  let reloj = null;
 
-  function destruirGraficos() {
-    graficos.forEach((g) => g.destroy());
-    graficos = [];
+  const destruirGraficos = () => { graficos.forEach((g) => g.destroy()); graficos = []; };
+  const pararReloj = () => { if (reloj) clearInterval(reloj); reloj = null; };
+
+  // ---------------------------------------------------------------- portada
+  function portada(d) {
+    const nombre = (auth.usuario()?.nombre ?? '').split(' ')[0];
+    const hoyTexto = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+    const relojEl = h('span', { class: 'db-reloj' }, horaTexto());
+    pararReloj();
+    reloj = setInterval(() => { relojEl.textContent = horaTexto(); }, 15000);
+    const ticket = d.numeroVentasUltimos30Dias > 0 ? d.ventasUltimos30Dias / d.numeroVentasUltimos30Dias : 0;
+    const mejorDia = [...d.ventasUltimos7Dias].sort((a, b) => b.total - a.total)[0];
+    const chispas = h('div', { class: 'db-chispas', 'aria-hidden': 'true' },
+      ...Array.from({ length: 14 }, (_, i) => h('i', { style: { '--x': `${(i * 37) % 100}%`, '--d': `${6 + (i % 5) * 1.7}s`, '--r': `${(i * 47) % 180}deg`, '--c': ['#F7A8C8', '#F2C36B', '#9EE6C2', '#F6EEE4', '#B9CCFF'][i % 5], '--retraso': `${-(i * 0.9)}s` } })));
+
+    const acciones = h('div', { class: 'db-acciones' },
+      auth.puede('ventas') ? h('a', { class: 'db-boton db-boton-claro', href: '#/ventas' }, '＋ Nueva venta') : null,
+      h('a', { class: 'db-boton db-boton-vidrio', href: '#/alertas' }, '🔔 Alertas',
+        d.totalIngredientesCriticos + d.productosVencidos + d.productosPorVencer > 0
+          ? h('span', { class: 'db-punto-vivo', 'aria-label': 'hay alertas' }) : null),
+      auth.puede('rentabilidad') ? h('a', { class: 'db-boton db-boton-vidrio', href: '#/rentabilidad' }, '📈 Márgenes') : null);
+
+    return h('header', { class: 'db-portada db-entra', style: { '--i': '0' } },
+      h('div', { class: 'db-aurora', 'aria-hidden': 'true' }, h('span'), h('span'), h('span')),
+      chispas,
+      h('div', { class: 'db-portada-contenido' },
+        h('div', { class: 'db-portada-izq' },
+          h('p', { class: 'db-sobretitulo' }, h('span', { class: 'db-punto-vivo' }), ' En vivo · ', hoyTexto, ' · ', relojEl),
+          h('h1', { id: 'titulo-dashboard', tabindex: '-1' }, `${saludo()}${nombre ? `, ${nombre}` : ''} `, h('span', { class: 'db-mano', 'aria-hidden': 'true' }, '👋')),
+          h('p', { class: 'db-bajada' }, 'Así va Dulce Hogar en los últimos 30 días.'),
+          acciones),
+        h('div', { class: 'db-portada-der' },
+          h('p', { class: 'db-etiqueta' }, 'Ventas · 30 días'),
+          h('p', { class: 'db-cifra-gigante' }, contador(d.ventasUltimos30Dias, (v) => formatoCOP(Math.round(v)), { duracion: 1800 })),
+          curvaVentas(d.ventasUltimos7Dias),
+          h('div', { class: 'db-chips' },
+            h('span', { class: 'db-chip' }, '💰 Margen ', h('strong', {}, formatoCOP(d.margenBrutoUltimos30Dias))),
+            h('span', { class: 'db-chip' }, '🧾 ', h('strong', {}, formatoNumero(d.numeroVentasUltimos30Dias)), ' ventas'),
+            h('span', { class: 'db-chip' }, '🎟️ Ticket ', h('strong', {}, formatoCOP(Math.round(ticket)))),
+            mejorDia?.total > 0 ? h('span', { class: 'db-chip' }, '🔥 Mejor día ', h('strong', {}, formatoFecha(mejorDia.fecha).slice(0, 5))) : null))));
   }
 
-  function dibujarGraficos(refs) {
-    destruirGraficos();
-    if (typeof Chart === 'undefined') {
-      refs.forEach((r) => r.canvas.parentElement.replaceChildren(vacio('No se pudo cargar la librería de gráficos.', '📉')));
-      return;
-    }
-    const texto = colorTexto();
-    const borde = colorBorde();
-    const ejes = (formatoY) => ({
-      x: { ticks: { color: texto }, grid: { color: borde } },
-      y: { beginAtZero: true, ticks: { color: texto, callback: formatoY }, grid: { color: borde } },
-    });
-    const [rVentas, rVendidos, rCompras, rCategoria, rTop, rCaducidad] = refs;
+  // ---------------------------------------------------------------- anillos
+  function anillos(d, extra) {
+    const totalMp = extra.totalMaterias;
+    const optimos = Math.max(0, totalMp - d.totalIngredientesCriticos);
+    const totalPt = d.caducidad.vigentes + d.caducidad.porVencer + d.caducidad.vencidos;
+    return h('div', { class: 'db-anillos' },
+      anillo({ porcentaje: d.margenPorcentaje30Dias, etiqueta: 'Margen bruto', ayuda: 'de cada peso vendido', valorTexto: d.margenPorcentaje30Dias === null ? 'sin ventas' : `${d.margenPorcentaje30Dias} %`, color: 'db-g-frambuesa', retraso: 0 }),
+      // El anillo del ROI se llena sobre una escala de 0 a 300 % (un ROI de 300 % o más lo completa); el centro muestra el valor real.
+      anillo({ porcentaje: d.roi30Dias === null ? null : Math.min(100, d.roi30Dias / 3), centro: d.roi30Dias, etiqueta: 'ROI', ayuda: 'ganancia por cada peso de costo', valorTexto: d.roi30Dias === null ? 'sin datos' : `${d.roi30Dias} %`, color: 'db-g-caramelo', retraso: 90 }),
+      anillo({ porcentaje: pct(optimos, totalMp), etiqueta: 'Salud del inventario', ayuda: `${optimos} de ${totalMp} insumos en óptimo`, valorTexto: `${pct(optimos, totalMp) ?? 0} %`, color: 'db-g-menta', retraso: 180 }),
+      anillo({ porcentaje: pct(d.caducidad.vigentes, totalPt), etiqueta: 'Frescura', ayuda: `${d.caducidad.vigentes} de ${totalPt} productos vigentes`, valorTexto: `${pct(d.caducidad.vigentes, totalPt) ?? 0} %`, color: 'db-g-cielo', retraso: 270 }),
+      // Degradados compartidos por los anillos (un solo <defs> en el documento)
+      s('svg', { width: 0, height: 0, style: 'position:absolute', 'aria-hidden': 'true' }, s('defs', {},
+        ...[['db-g-frambuesa', '#F28DB6', '#B8336A'], ['db-g-caramelo', '#F6C177', '#C2621F'], ['db-g-menta', '#7FE0B0', '#1F7A4D'], ['db-g-cielo', '#9DBBF5', '#2E5AAC']]
+          .map(([id, a, b]) => s('linearGradient', { id, x1: 0, y1: 0, x2: 1, y2: 1 }, s('stop', { offset: '0', 'stop-color': a }), s('stop', { offset: '1', 'stop-color': b }))))));
+  }
 
-    graficos.push(new Chart(rVentas.canvas, {
+  // ---------------------------------------------------------------- tarjetas de cifras
+  function tarjetas(d) {
+    const t = (i, icono, tono, titulo, valor, nota, enlace) => h(enlace ? 'a' : 'div', { class: ['db-tarjeta', 'db-brillo', 'db-entra'], href: enlace ?? null, style: { '--i': String(4 + i) } },
+      h('span', { class: ['db-icono', `db-tono-${tono}`], 'aria-hidden': 'true' }, icono),
+      h('span', { class: 'db-tarjeta-titulo' }, titulo),
+      h('span', { class: 'db-tarjeta-valor' }, contador(valor, (v) => formatoCOP(Math.round(v)), { retraso: 200 + i * 80 })),
+      h('span', { class: 'db-tarjeta-nota' }, nota));
+    return h('div', { class: 'db-tarjetas' },
+      t(0, '🧂', 'caramelo', 'Insumos en bodega', d.valorInventarioInsumos, 'Stock × costo', '#/materias'),
+      t(1, '🎂', 'frambuesa', 'Producto terminado', d.valorProductosTerminados, 'Stock × precio de venta', '#/productos'),
+      t(2, '🛒', 'cielo', 'Compras · 30 días', d.comprasUltimos30Dias, 'Entradas de proveedor', '#/movimientos'),
+      t(3, '🗑️', d.perdidasUltimos30Dias > 0 ? 'alerta' : 'menta', 'Pérdidas · 30 días', d.perdidasUltimos30Dias, d.perdidasUltimos30Dias > 0 ? 'Bajas y mermas a costo' : 'Sin pérdidas, ¡bien!', '#/alertas'));
+  }
+
+  // ---------------------------------------------------------------- podio de más vendidos
+  function podio(d) {
+    const lista = d.topProductosVendidos;
+    const max = Math.max(1, ...lista.map((p) => p.total));
+    const medallas = ['🥇', '🥈', '🥉', '4', '5'];
+    return h('section', { class: 'db-panel db-entra', style: { '--i': '9' }, 'aria-labelledby': 'db-podio-t' },
+      h('div', { class: 'db-panel-cab' }, h('h2', { id: 'db-podio-t' }, 'Los más vendidos'), h('span', { class: 'db-panel-sub' }, '30 días')),
+      lista.length === 0 ? h('p', { class: 'db-vacio' }, 'Aún no hay ventas: el podio te espera 🏆') : h('ol', { class: 'db-podio' },
+        ...lista.map((p, i) => h('li', { class: 'db-podio-fila', style: { '--i': String(i) } },
+          h('span', { class: ['db-medalla', i < 3 ? `db-medalla-${i + 1}` : null], 'aria-hidden': 'true' }, medallas[i]),
+          h('div', { class: 'db-podio-info' },
+            h('div', { class: 'db-podio-linea' }, h('span', { class: 'db-podio-nombre' }, p.nombre), h('span', { class: 'db-podio-total' }, formatoCOP(p.total))),
+            h('div', { class: 'db-barra', role: 'img', 'aria-label': `${p.unidades} unidades vendidas` },
+              h('span', { class: 'db-barra-relleno', style: { '--ancho': `${(p.total / max) * 100}%` } })),
+            h('span', { class: 'db-podio-unidades' }, `${formatoNumero(p.unidades)} unidades`))))));
+  }
+
+  // ---------------------------------------------------------------- pulso de actividad
+  function pulso(eventos) {
+    return h('section', { class: 'db-panel db-entra', style: { '--i': '10' }, 'aria-labelledby': 'db-pulso-t' },
+      h('div', { class: 'db-panel-cab' }, h('h2', { id: 'db-pulso-t' }, 'Pulso de la pastelería'), h('span', { class: 'db-panel-sub' }, h('span', { class: 'db-punto-vivo' }), ' reciente')),
+      eventos.length === 0 ? h('p', { class: 'db-vacio' }, 'Todavía no hay actividad.') : h('ol', { class: 'db-linea-tiempo' },
+        ...eventos.map((e, i) => h('li', { class: ['db-evento', `db-evento-${e.tipo}`], style: { '--i': String(i) } },
+          h('span', { class: 'db-evento-icono', 'aria-hidden': 'true' }, e.icono),
+          h('div', { class: 'db-evento-cuerpo' },
+            h('span', { class: 'db-evento-titulo' }, e.titulo),
+            h('span', { class: 'db-evento-detalle' }, e.detalle)),
+          h('time', { class: 'db-evento-hora', datetime: e.fecha, title: new Date(e.fecha).toLocaleString('es-CO') }, haceCuanto(e.fecha))))));
+  }
+
+  // ---------------------------------------------------------------- insumos que piden atención
+  function insumos(d) {
+    const lista = d.ingredientesCriticos;
+    return h('section', { class: 'db-panel db-entra', style: { '--i': '11' }, 'aria-labelledby': 'db-insumos-t' },
+      h('div', { class: 'db-panel-cab' }, h('h2', { id: 'db-insumos-t' }, 'Insumos que piden atención'), h('a', { class: 'db-enlace', href: '#/alertas' }, 'Ver alertas →')),
+      lista.length === 0 ? h('p', { class: 'db-vacio' }, '✨ Todo el inventario está por encima de su mínimo.') : h('ul', { class: 'db-insumos' },
+        ...lista.map((m, i) => {
+          const nivel = m.minimo > 0 ? Math.min(100, (m.stock / m.minimo) * 100) : 100;
+          return h('li', { class: ['db-insumo', m.estado === 'CRITICO' ? 'db-insumo-critico' : 'db-insumo-bajo'], style: { '--i': String(i) } },
+            h('div', { class: 'db-insumo-linea' },
+              h('strong', {}, m.nombre),
+              h('span', { class: 'db-insumo-estado' }, m.estado === 'CRITICO' ? 'Crítico' : 'Bajo')),
+            h('div', { class: 'db-barra db-barra-fina', role: 'img', 'aria-label': `${formatoNumero(m.stock)} de un mínimo de ${formatoNumero(m.minimo)} ${m.unidad}` },
+              h('span', { class: 'db-barra-relleno', style: { '--ancho': `${nivel}%` } })),
+            h('span', { class: 'db-insumo-dato' }, `${formatoNumero(m.stock)} / ${formatoNumero(m.minimo)} ${m.unidad} mínimo`));
+        })));
+  }
+
+  // ---------------------------------------------------------------- gráficos (Chart.js con degradados)
+  function tarjetaGrafico(titulo, sub, descripcion, i, alto = 280) {
+    const canvas = h('canvas', { role: 'img', 'aria-label': descripcion });
+    const centro = h('div', { class: 'db-dona-centro', 'aria-hidden': 'true' });
+    return {
+      canvas, centro,
+      el: h('section', { class: 'db-panel db-entra', style: { '--i': String(i) } },
+        h('div', { class: 'db-panel-cab' }, h('h2', {}, titulo), h('span', { class: 'db-panel-sub' }, sub)),
+        h('div', { class: 'db-grafico', style: { height: `${alto}px` } }, canvas, centro)),
+    };
+  }
+
+  function dibujarGraficos(gVentas, gCategoria, gCompras) {
+    destruirGraficos();
+    if (typeof Chart === 'undefined') return;
+    const texto = css('--color-texto-secundario', '#6A5B50');
+    const rejilla = esOscuro() ? 'rgba(255,255,255,.06)' : 'rgba(42,29,21,.06)';
+    const anim = sinMovimiento() ? false : { duration: 1400, easing: 'easeOutQuart' };
+    const degradado = (a, b) => (c) => {
+      const { ctx: g, chartArea: area } = c.chart;
+      if (!area) return a;
+      const grad = g.createLinearGradient(0, area.bottom, 0, area.top);
+      grad.addColorStop(0, b); grad.addColorStop(1, a);
+      return grad;
+    };
+    const tooltip = { backgroundColor: 'rgba(36,23,15,.94)', titleColor: '#fff', bodyColor: '#F3E9DE', padding: 12, cornerRadius: 12, displayColors: true, boxPadding: 4 };
+    Chart.defaults.font.family = css('--fuente', 'system-ui');
+
+    const dias = datos.ventasUltimos7Dias;
+    graficos.push(new Chart(gVentas.canvas, {
       type: 'bar',
       data: {
-        labels: datos.ventasUltimos7Dias.map((d) => formatoFecha(d.fecha).slice(0, 5)),
+        labels: dias.map((d) => new Date(`${d.fecha}T12:00:00`).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric' })),
         datasets: [
-          { label: 'Ventas', data: datos.ventasUltimos7Dias.map((d) => d.total), backgroundColor: PALETA[0], borderRadius: 8, order: 2 },
-          { label: 'Margen', type: 'line', data: datos.ventasUltimos7Dias.map((d) => d.margen), borderColor: PALETA[1], backgroundColor: PALETA[1], tension: 0.3, pointRadius: 4, order: 1 },
+          { label: 'Ventas', data: dias.map((d) => d.total), backgroundColor: degradado('#C2621F', 'rgba(194,98,31,.35)'), borderRadius: 12, borderSkipped: false, maxBarThickness: 46, order: 2 },
+          { label: 'Margen', type: 'line', data: dias.map((d) => d.margen), borderColor: '#D9437F', backgroundColor: degradado('rgba(217,67,127,.35)', 'rgba(217,67,127,0)'),
+            fill: true, tension: 0.42, borderWidth: 3, pointRadius: 5, pointHoverRadius: 8, pointBackgroundColor: '#fff', pointBorderColor: '#D9437F', pointBorderWidth: 3, order: 1 },
         ],
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: texto } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatoCOP(c.parsed.y)}` } } }, scales: ejes((v) => formatoCOPCorto(v)) },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: anim, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom', labels: { color: texto, usePointStyle: true, pointStyle: 'circle', padding: 18 } }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${formatoCOP(c.parsed.y)}` } } },
+        scales: { x: { ticks: { color: texto }, grid: { display: false }, border: { display: false } },
+          y: { beginAtZero: true, ticks: { color: texto, callback: (v) => formatoCOPCorto(v), maxTicksLimit: 5 }, grid: { color: rejilla }, border: { display: false } } },
+      },
     }));
 
-    graficos.push(new Chart(rVendidos.canvas, {
-      type: 'bar',
+    const cats = datos.stockPorCategoria;
+    const totalCat = cats.reduce((a, c) => a + c.valor, 0);
+    reemplazarHijos(gCategoria.centro, h('span', { class: 'db-dona-valor' }, formatoCOPCorto(totalCat)), h('span', { class: 'db-dona-etq' }, 'en insumos'));
+    graficos.push(new Chart(gCategoria.canvas, {
+      type: 'doughnut',
+      data: { labels: cats.map((c) => c.categoria), datasets: [{ data: cats.map((c) => c.valor), backgroundColor: ['#C2621F', '#D9437F', '#2E9B6A', '#E0A43A', '#4C7BD9', '#8C6A55', '#B07CC6'], borderWidth: 0, hoverOffset: 14, spacing: 3, borderRadius: 8 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '72%', animation: sinMovimiento() ? false : { animateRotate: true, duration: 1600, easing: 'easeOutQuart' },
+        plugins: { legend: { position: 'bottom', labels: { color: texto, usePointStyle: true, pointStyle: 'circle', padding: 14 } }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.label}: ${formatoCOP(c.parsed)} (${pct(c.parsed, totalCat)} %)` } } },
+      },
+    }));
+
+    graficos.push(new Chart(gCompras.canvas, {
+      type: 'line',
       data: {
-        labels: datos.topProductosVendidos.map((p) => p.nombre),
-        datasets: [{ label: 'Vendido (COP)', data: datos.topProductosVendidos.map((p) => p.total), backgroundColor: PALETA.slice(0, 5), borderRadius: 8 }],
+        labels: datos.comprasUltimos7Dias.map((d) => new Date(`${d.fecha}T12:00:00`).toLocaleDateString('es-CO', { weekday: 'short' })),
+        datasets: [{ label: 'Compras', data: datos.comprasUltimos7Dias.map((d) => d.total), borderColor: '#4C7BD9', backgroundColor: degradado('rgba(76,123,217,.35)', 'rgba(76,123,217,0)'),
+          fill: true, tension: 0.42, borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#fff', pointBorderColor: '#4C7BD9', pointBorderWidth: 2 }],
       },
       options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${formatoCOP(c.parsed.x)} · ${datos.topProductosVendidos[c.dataIndex].unidades} und` } } },
-        scales: { x: { beginAtZero: true, ticks: { color: texto, callback: (v) => formatoCOPCorto(v) }, grid: { color: borde } }, y: { ticks: { color: texto }, grid: { display: false } } },
+        responsive: true, maintainAspectRatio: false, animation: anim,
+        plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` Compras: ${formatoCOP(c.parsed.y)}` } } },
+        scales: { x: { ticks: { color: texto }, grid: { display: false }, border: { display: false } },
+          y: { beginAtZero: true, ticks: { color: texto, callback: (v) => formatoCOPCorto(v), maxTicksLimit: 4 }, grid: { color: rejilla }, border: { display: false } } },
       },
-    }));
-
-    graficos.push(new Chart(rCompras.canvas, {
-      type: 'bar',
-      data: {
-        labels: datos.comprasUltimos7Dias.map((d) => formatoFecha(d.fecha).slice(0, 5)),
-        datasets: [{ label: 'Compras de insumos (COP)', data: datos.comprasUltimos7Dias.map((d) => d.total), backgroundColor: PALETA[0], borderRadius: 8 }],
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => formatoCOP(c.parsed.y) } } }, scales: ejes((v) => formatoCOPCorto(v)) },
-    }));
-
-    graficos.push(new Chart(rCategoria.canvas, {
-      type: 'doughnut',
-      data: {
-        labels: datos.stockPorCategoria.map((c) => c.categoria),
-        datasets: [{ data: datos.stockPorCategoria.map((c) => c.valor), backgroundColor: PALETA, borderWidth: 0 }],
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: texto } }, tooltip: { callbacks: { label: (c) => `${c.label}: ${formatoCOP(c.parsed)}` } } } },
-    }));
-
-    graficos.push(new Chart(rTop.canvas, {
-      type: 'bar',
-      data: {
-        labels: datos.topProductosPorValor.map((p) => p.nombre),
-        datasets: [{ label: 'Valor en inventario (COP)', data: datos.topProductosPorValor.map((p) => p.valor), backgroundColor: PALETA.slice(0, 5), borderRadius: 8 }],
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => formatoCOP(c.parsed.x) } } },
-        scales: { x: { beginAtZero: true, ticks: { color: texto, callback: (v) => formatoCOPCorto(v) }, grid: { color: borde } }, y: { ticks: { color: texto }, grid: { display: false } } },
-      },
-    }));
-
-    const { vigentes, porVencer, vencidos } = datos.caducidad;
-    graficos.push(new Chart(rCaducidad.canvas, {
-      type: 'doughnut',
-      data: { labels: ['Vigentes', 'Por vencer (≤ 3 días)', 'Vencidos'], datasets: [{ data: [vigentes, porVencer, vencidos], backgroundColor: ['#1F7A4D', '#D08A2E', '#B42318'], borderWidth: 0 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: texto } } } },
     }));
   }
 
-  function pintar() {
+  // ---------------------------------------------------------------- composición
+  function pintar(extra) {
     const d = datos;
-    const criticos = d.ingredientesCriticos;
-    const refs = [
-      tarjetaGrafico('💵 Ventas y margen (últimos 7 días)', 'grafico-ventas', 'Barras con las ventas por día y línea con el margen bruto'),
-      tarjetaGrafico('🥇 Más vendidos (30 días)', 'grafico-vendidos', 'Barras horizontales con los productos más vendidos en pesos'),
-      tarjetaGrafico('🛒 Compras de insumos (últimos 7 días)', 'grafico-compras', 'Barras con el valor de las entradas de materia prima por día'),
-      tarjetaGrafico('🥧 Valor del inventario por categoría', 'grafico-categorias', 'Distribución del valor de las materias primas por categoría'),
-      tarjetaGrafico('🏆 Productos con mayor valor en inventario', 'grafico-top', 'Barras horizontales con los productos de mayor valor en stock'),
-      tarjetaGrafico('📅 Estado de caducidad de productos', 'grafico-caducidad', 'Productos vigentes, por vencer y vencidos'),
-    ];
-
+    const gVentas = tarjetaGrafico('Ventas y margen', 'últimos 7 días', 'Barras con las ventas por día y área con el margen bruto de los últimos 7 días', 8, 300);
+    const gCategoria = tarjetaGrafico('Insumos por categoría', 'valor a costo', 'Dona con el valor del inventario de insumos por categoría', 12, 280);
+    const gCompras = tarjetaGrafico('Compras a proveedores', 'últimos 7 días', 'Curva con el valor de las compras de insumos por día', 13, 220);
+    const alertas = d.totalIngredientesCriticos + d.productosVencidos + d.productosPorVencer;
     reemplazarHijos(cuerpo,
-      h('p', { class: 'kpi-seccion' }, 'Ventas · últimos 30 días'),
-      h('div', { class: 'kpis' },
-        kpi({ icono: '💵', titulo: 'Ventas', valor: formatoCOP(d.ventasUltimos30Dias), nota: `${formatoNumero(d.numeroVentasUltimos30Dias)} venta(s) registradas`, clase: 'destacado' }),
-        kpi({ icono: '📈', titulo: 'Margen bruto', valor: formatoCOP(d.margenBrutoUltimos30Dias), nota: `${porcentaje(d.margenPorcentaje30Dias)} de las ventas`, clase: 'tendencia-up' }),
-        kpi({ icono: '🔁', titulo: 'ROI sobre el costo', valor: porcentaje(d.roi30Dias), nota: `Costo de lo vendido ${formatoCOP(d.costoVentasUltimos30Dias)}` }),
-        kpi({ icono: '🗑️', titulo: 'Pérdidas (bajas y mermas)', valor: formatoCOP(d.perdidasUltimos30Dias), nota: 'Valorizadas a costo', clase: d.perdidasUltimos30Dias > 0 ? 'aviso' : null })),
-      h('div', { class: 'graficos-grid' }, refs[0].el, refs[1].el),
-      h('p', { class: 'kpi-seccion' }, 'Inventario'),
-      h('div', { class: 'kpis' },
-        kpi({ icono: '💰', titulo: 'Inventario de insumos', valor: formatoCOP(d.valorInventarioInsumos), nota: 'Σ stock × costo unitario' }),
-        kpi({ icono: '🛒', titulo: 'Compras (últimos 30 días)', valor: formatoCOP(d.comprasUltimos30Dias), nota: 'Entradas registradas × costo' }),
-        kpi({ icono: '🎂', titulo: 'Productos terminados', valor: formatoCOP(d.valorProductosTerminados), nota: 'Σ stock × precio de venta' }),
-        kpi({
-          icono: '⚠️', titulo: 'Ingredientes críticos o bajos', valor: formatoNumero(d.totalIngredientesCriticos),
-          nota: `${formatoNumero(d.productosVencidos)} producto(s) vencido(s) · ${formatoNumero(d.productosPorVencer)} por vencer`,
-          clase: d.totalIngredientesCriticos > 0 || d.productosVencidos > 0 ? 'alerta' : 'tendencia-up',
-          enlace: '#/alertas',
-        })),
-      h('div', { class: 'graficos-grid' }, refs[2].el, refs[3].el),
-      h('div', { class: 'graficos-grid' }, refs[4].el, refs[5].el),
-      h('div', { class: 'panel' },
-        h('div', { class: 'panel-header' }, h('h2', {}, '⚠️ Ingredientes críticos')),
-        criticos.length === 0
-          ? vacio('Todas las materias primas están por encima de su mínimo.', '✅')
-          : tabla({
-            descripcion: 'Materias primas en estado bajo o crítico',
-            columnas: [{ titulo: 'Código' }, { titulo: 'Ingrediente' }, { titulo: 'Stock', num: true }, { titulo: 'Mínimo', num: true }, { titulo: 'Estado' }],
-            filas: criticos.map((m) => {
-              const e = infoEstado(m.estado);
-              return { celdas: [m.codigo, m.nombre, `${formatoNumero(m.stock)} ${m.unidad}`, `${formatoNumero(m.minimo)} ${m.unidad}`, insignia(e.texto, e.clase)] };
-            }),
-          })));
-    dibujarGraficos(refs);
+      portada(d),
+      alertas > 0 ? h('a', { class: 'db-aviso db-entra', href: '#/alertas', style: { '--i': '1' } },
+        h('span', { class: 'db-aviso-icono', 'aria-hidden': 'true' }, '⚡'),
+        h('span', {}, h('strong', {}, `${alertas} cosa${alertas === 1 ? '' : 's'} para revisar hoy: `),
+          [d.productosVencidos ? `${d.productosVencidos} vencido(s)` : null, d.productosPorVencer ? `${d.productosPorVencer} por vencer` : null, d.totalIngredientesCriticos ? `${d.totalIngredientesCriticos} insumo(s) bajo mínimo` : null].filter(Boolean).join(' · ')),
+        h('span', { class: 'db-aviso-flecha', 'aria-hidden': 'true' }, '→')) : null,
+      anillos(d, extra),
+      tarjetas(d),
+      h('div', { class: 'db-rejilla db-rejilla-principal' }, gVentas.el, podio(d)),
+      h('div', { class: 'db-rejilla db-rejilla-tres' }, pulso(extra.eventos), insumos(d), h('div', { class: 'db-columna' }, gCategoria.el, gCompras.el)));
+    requestAnimationFrame(() => dibujarGraficos(gVentas, gCategoria, gCompras));
   }
 
+  function esqueleto() {
+    return h('div', { class: 'db-esqueleto', 'aria-busy': 'true', 'aria-label': 'Cargando el tablero' },
+      h('div', { class: 'db-esq db-esq-portada' }),
+      h('div', { class: 'db-esq-fila' }, ...Array.from({ length: 4 }, () => h('div', { class: 'db-esq db-esq-anillo' }))),
+      h('div', { class: 'db-esq-fila' }, ...Array.from({ length: 4 }, () => h('div', { class: 'db-esq db-esq-tarjeta' }))));
+  }
+
+  let extraActual = null;
   async function cargar() {
     const marca = ++ultimaCarga;
-    reemplazarHijos(cuerpo, cargando('Calculando indicadores…'));
+    if (!datos) reemplazarHijos(cuerpo, esqueleto());
     try {
-      const [dash, productos] = await Promise.all([
+      const [dash, productos, materias, ventas, movimientos] = await Promise.all([
         api.get('/reportes/dashboard'),
         api.get('/productos', { limite: 1 }).catch(() => null),
+        api.get('/materias-primas', { limite: 1 }).catch(() => null),
+        api.get('/ventas', { limite: 6 }).catch(() => null),
+        api.get('/movimientos', { limite: 6 }).catch(() => null),
       ]);
       if (marca !== ultimaCarga) return;
       const total = productos?.paginacion?.total ?? dash.productosPorVencer + dash.productosVencidos;
-      datos = {
-        ...dash,
-        caducidad: {
-          vigentes: Math.max(0, total - dash.productosPorVencer - dash.productosVencidos),
-          porVencer: dash.productosPorVencer,
-          vencidos: dash.productosVencidos,
-        },
-      };
-      pintar();
+      datos = { ...dash, caducidad: { vigentes: Math.max(0, total - dash.productosPorVencer - dash.productosVencidos), porVencer: dash.productosPorVencer, vencidos: dash.productosVencidos } };
+      const TIPOS = { ENTRADA: ['📦', 'entrada', 'Entrada de'], SALIDA: ['🥣', 'salida', 'Consumo de'], AJUSTE: ['⚖️', 'ajuste', 'Ajuste de'], AJUSTE_NEGATIVO: ['⚖️', 'ajuste', 'Ajuste de'] };
+      const eventos = [
+        ...(ventas?.datos ?? []).map((v) => ({ tipo: 'venta', icono: '💵', fecha: v.creadoEn, titulo: `Venta #${v.id} · ${formatoCOP(v.total)}`,
+          detalle: `${v.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}${v.registradoPor ? ` — ${v.registradoPor}` : ''}` })),
+        ...(movimientos?.datos ?? []).map((m) => {
+          const [icono, tipo, verbo] = TIPOS[m.tipo] ?? ['•', 'ajuste', m.tipo];
+          const nombre = m.nombre ?? m.codigo;
+          return { tipo, icono, fecha: m.creadoEn, titulo: `${verbo} ${nombre}`, detalle: `${m.tipo === 'SALIDA' || m.tipo === 'AJUSTE_NEGATIVO' ? '−' : '+'}${formatoNumero(m.cantidad)} ${m.unidad ?? ''}${m.proveedor ? ` · ${m.proveedor}` : ''}${m.registradoPor ? ` — ${m.registradoPor}` : ''}` };
+        }),
+      ].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 7);
+      extraActual = { totalMaterias: materias?.paginacion?.total ?? dash.totalIngredientesCriticos, eventos };
+      pintar(extraActual);
     } catch (error) {
       if (marca !== ultimaCarga) return;
       reemplazarHijos(cuerpo, bannerError(error, cargar));
@@ -198,7 +374,7 @@ export function crearVista(ctx) {
     el,
     titulo: 'Tablero',
     cargar,
-    temaCambiado() { if (datos && graficos.length) pintar(); },
-    destruir() { ultimaCarga++; destruirGraficos(); },
+    temaCambiado() { if (datos && extraActual) pintar(extraActual); },
+    destruir() { ultimaCarga++; destruirGraficos(); pararReloj(); },
   };
 }

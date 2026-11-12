@@ -58,7 +58,8 @@ export function crearH(doc) {
           el.setAttribute(`data-${d.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`, String(v));
         }
       } else if (k === 'style') {
-        if (typeof valor === 'object') Object.assign(el.style, valor);
+        // Las propiedades personalizadas (--x) solo se aplican con setProperty; Object.assign las ignora.
+        if (typeof valor === 'object') for (const [p, v] of Object.entries(valor)) { if (p.startsWith('--')) el.style.setProperty(p, v); else el.style[p] = v; }
         else el.setAttribute('style', String(valor));
       } else if (k.startsWith('on')) {
         if (typeof valor !== 'function') throw new Error(`h(): ${clave} debe ser una función, no texto (riesgo XSS)`);
