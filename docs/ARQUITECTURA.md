@@ -13,8 +13,9 @@ flowchart TB
   subgraph API["Monolito modular Pastel Stock (Node.js 22 + Express)"]
     ID["Identidad y Acceso<br/>usuarios, roles, JWT"]
     INV["Inventario y Movimientos<br/>materias primas, kardex"]
-    CAT["Catálogo y Producción<br/>productos, recetas, producir"]
-    REP["Reportes y Analítica<br/>KPI, exportes PDF/Excel"]
+    CAT["Catálogo y Producción<br/>productos, recetas, producir, costeo, kardex de producto"]
+    VEN["Ventas (v1.1)<br/>ventas, margen congelado"]
+    REP["Reportes y Analítica<br/>KPI, alertas, rentabilidad, exportes PDF/Excel"]
   end
   API --> DB[("PostgreSQL 16")]
   API -. "OTLP (opcional)" .-> OBS["OTel Collector → Prometheus · Loki · Tempo → Grafana"]
@@ -28,6 +29,7 @@ flowchart TB
     ID["Identidad y Acceso<br/>(genérico)"]
     INV["Inventario y Movimientos<br/>(núcleo)"]
     CAT["Catálogo y Producción<br/>(núcleo)"]
+    VEN["Ventas<br/>(núcleo, v1.1)"]
     REP["Reportes y Analítica<br/>(soporte)"]
   end
   ID -- "OHS + Published Language<br/>(claims JWT: sub, rol)" --> INV
@@ -36,6 +38,8 @@ flowchart TB
   INV -- "Customer/Supplier<br/>(existe(código), unidad)" --> CAT
   INV -- "Conformist<br/>(lectura de stock y movimientos)" --> REP
   CAT -- "Conformist<br/>(lectura de productos y recetas)" --> REP
+  CAT -- "Customer/Supplier<br/>(reposEn(db): productos + kardex en la misma transacción)" --> VEN
+  VEN -- "Conformist<br/>(lectura de ventas)" --> REP
   REP -. "candidato a extraer<br/>si crece la carga" .-> X["(futuro) Servicio de reportes"]
 ```
 
@@ -75,7 +79,7 @@ src/
   config.js               Configuración solo desde variables de entorno
   app.js                  Raíz de composición (helmet, rate limit, rutas, /health)
   server.js, telemetry.js Arranque, apagado ordenado y OpenTelemetry (opcional)
-  identity/ inventory/ catalog/ reporting/   {domain, application, adapters}
+  identity/ inventory/ catalog/ sales/ reporting/   {domain, application, adapters}
   shared/                 Errores (RFC 9457), validación (Ajv), logger (pino), métricas
   db/                     Pool, migraciones SQL y siembra
 openapi/openapi.yaml      Contrato OpenAPI 3.1

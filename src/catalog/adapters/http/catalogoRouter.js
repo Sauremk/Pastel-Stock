@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { asyncH, paginacion, pagina, parametro, enumerado, RE_PT } from '../../../shared/http.js';
 import { validacion } from '../../../shared/errors.js';
 import { autorizar } from '../../../identity/adapters/http/middleware.js';
+import { RE_CLAVE } from '../../../shared/idempotencia.js';
 
 const TODOS = ['admin', 'operador', 'contador'];
-const RE_CLAVE = /^[A-Za-z0-9_-]{8,64}$/;
 const CATEGORIAS_PRODUCTO = ['Pasteles', 'Panes', 'Galletas', 'Tartas', 'Postres'];
 const idRuta = (v) => {
   const n = Number(v);
@@ -22,12 +22,21 @@ export function crearCatalogoRouter({ casos, validar }) {
     res.json(pagina(filas, pag, total));
   }));
   r.post('/productos', autorizar('admin'), validar.cuerpo('ProductoCrear'), asyncH(async (req, res) => {
-    const p = await casos.crearProducto(req.body);
+    const p = await casos.crearProducto(req.body, req.usuario.id);
     res.status(201).location(`/api/v1/productos/${p.sku}`).json(p);
   }));
   r.get('/productos/:sku', autorizar(...TODOS), asyncH(async (req, res) => res.json(await casos.obtenerProducto(parametro(req.params.sku, RE_PT, 'sku')))));
-  r.put('/productos/:sku', autorizar('admin'), validar.cuerpo('ProductoActualizar'), asyncH(async (req, res) => res.json(await casos.actualizarProducto(parametro(req.params.sku, RE_PT, 'sku'), req.body))));
+  r.put('/productos/:sku', autorizar('admin'), validar.cuerpo('ProductoActualizar'), asyncH(async (req, res) => res.json(await casos.actualizarProducto(parametro(req.params.sku, RE_PT, 'sku'), req.body, req.usuario.id))));
   r.delete('/productos/:sku', autorizar('admin'), asyncH(async (req, res) => { await casos.eliminarProducto(parametro(req.params.sku, RE_PT, 'sku')); res.status(204).end(); }));
+
+  r.post('/productos/:sku/ajustes', autorizar('admin', 'operador'), validar.cuerpo('AjusteProductoSolicitud'), asyncH(async (req, res) => {
+    res.status(201).json(await casos.ajustarProducto(parametro(req.params.sku, RE_PT, 'sku'), req.body, req.usuario.id));
+  }));
+  r.get('/productos/:sku/movimientos', autorizar(...TODOS), asyncH(async (req, res) => {
+    const pag = paginacion(req.query);
+    const { datos, total } = await casos.kardexProducto(parametro(req.params.sku, RE_PT, 'sku'), { limite: pag.limite, offset: pag.offset });
+    res.json(pagina(datos, pag, total));
+  }));
 
   // ---- Recetas
   r.get('/recetas', autorizar(...TODOS), asyncH(async (req, res) => {
@@ -40,6 +49,7 @@ export function crearCatalogoRouter({ casos, validar }) {
     res.status(201).location(`/api/v1/recetas/${rec.id}`).json(rec);
   }));
   r.get('/recetas/:id', autorizar(...TODOS), asyncH(async (req, res) => res.json(await casos.obtenerReceta(idRuta(req.params.id)))));
+  r.get('/recetas/:id/costeo', autorizar(...TODOS), asyncH(async (req, res) => res.json(await casos.costeoReceta(idRuta(req.params.id)))));
   r.put('/recetas/:id', autorizar('admin'), validar.cuerpo('RecetaActualizar'), asyncH(async (req, res) => res.json(await casos.reemplazarReceta(idRuta(req.params.id), req.body))));
   r.delete('/recetas/:id', autorizar('admin'), asyncH(async (req, res) => { await casos.eliminarReceta(idRuta(req.params.id)); res.status(204).end(); }));
   r.post('/recetas/:id/producir', autorizar('admin', 'operador'), validar.cuerpo('ProducirSolicitud'), asyncH(async (req, res) => {

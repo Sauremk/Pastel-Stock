@@ -1,13 +1,18 @@
 {
   "name": "pastel-stock",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sistema de inventarios para pastelerías y panaderías (Dulce Hogar). Monolito modular con núcleo hexagonal.",
   "private": true,
   "type": "module",
   "license": "MIT",
   "author": "Kevin Andres Rojas Marin",
-  "repository": { "type": "git", "url": "https://github.com/Sauremk/Pastel-Stock.git" },
-  "engines": { "node": ">=22" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sauremk/Pastel-Stock.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
@@ -20,7 +25,8 @@
     "test:integration": "node --test --test-concurrency=2 --no-warnings \"tests/integration/**/*.test.js\"",
     "test:contract": "node --test --no-warnings \"tests/contract/**/*.test.js\"",
     "test:cov": "c8 --all --src=src --reporter=lcov --reporter=text-summary --check-coverage --lines=70 node --test --test-concurrency=2 --no-warnings \"tests/**/*.test.js\"",
-    "openapi:lint": "redocly lint openapi/openapi.yaml"
+    "openapi:lint": "redocly lint openapi/openapi.yaml",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -55,6 +61,7 @@
     "embedded-postgres": "18.6.0-beta.19",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
+    "playwright": "^1.63.0",
     "supertest": "^7.0.0"
   }
 }

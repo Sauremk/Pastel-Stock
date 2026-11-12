@@ -6,11 +6,11 @@ Supuesto de capacidad: 16 h por semana, de las cuales el 20 % se reserva siempre
 
 | Trabajo | Paga / aporta | Esfuerzo | Disparador |
 |---|---|---|---|
-| **Ventas y costeo real:** registrar ventas de productos terminados, costo por receta y margen real; volver a mostrar ventas, margen y ROI en el tablero, ahora calculados | Completa DT-10; valor de negocio para fijar precios | ≈ 40 h | La administradora pide costeo por receta o margen real |
-| **Alertas de caducidad:** avisos de productos por vencer (hoy solo se cuentan en el tablero) | Reduce merma | ≈ 12 h | Producto vencido en inventario |
-| **Métricas del pool y alerta de saturación** (`db.pool.*`) | Cierra DT-15 | ≈ 8 h | Antes del primer despliegue a producción |
+| ✅ **Hecho en v1.1 (ADR-17).** **Ventas y costeo real:** registrar ventas de productos terminados, costo por receta y margen real; volver a mostrar ventas, margen y ROI en el tablero, ahora calculados | Completa DT-10; valor de negocio para fijar precios | ≈ 40 h | La administradora pide costeo por receta o margen real |
+| ✅ **Hecho en v1.1.** **Alertas de caducidad:** avisos de productos por vencer (hoy solo se cuentan en el tablero) | Reduce merma | ≈ 12 h | Producto vencido en inventario |
+| ✅ **Hecho en v1.1.** **Métricas del pool y alerta de saturación** (`db.pool.*`) | Cierra DT-15 | ≈ 8 h | Antes del primer despliegue a producción |
 | **Respaldo verificado:** `pg_dump` semanal fuera del proveedor y prueba de restauración trimestral | Reduce riesgo de pérdida de datos | ≈ 6 h | Primer mes en producción |
-| **Conteo físico vs sistema:** pantalla de ajustes (`AJUSTE`) con motivo | Confiabilidad del stock | ≈ 16 h | Diferencia > 5 % entre stock del sistema y conteo físico mensual |
+| ✅ **Hecho en v1.1.** **Conteo físico vs sistema:** pantalla de ajustes (`AJUSTE`) con motivo | Confiabilidad del stock | ≈ 16 h | Diferencia > 5 % entre stock del sistema y conteo físico mensual |
 
 ## Siguiente — febrero a marzo 2027 (adaptativo)
 
@@ -29,6 +29,9 @@ Supuesto de capacidad: 16 h por semana, de las cuales el 20 % se reserva siempre
 | **Logs de producción al Collector** (reenvío desde Render o servicio gestionado) | Paga DT-14 | ≈ 24 h | Primer incidente que no se pueda diagnosticar con los logs del proveedor |
 
 ## Condicional
+
+- **Lotes con caducidad propia y PEPS** (DT-23): solo si en el piloto se mezclan lotes con fechas distintas del mismo producto.
+- **Anulación de ventas con reverso de stock:** solo si Dulce Hogar la pide; hoy se corrige con un ajuste `CORRECCION`.
 
 | Trabajo | Disparador |
 |---|---|

@@ -20,6 +20,7 @@ Cada ADR sigue la plantilla de 5 campos (Título, Estado, Contexto, Decisión, C
 | [ADR-14](ADR-14-sli-slo-y-presupuesto-de-error.md) | SLI/SLO de disponibilidad (99,5 %) y latencia para el endpoint crítico, con política de presupuesto de error | Aceptado (pendiente de ratificación escrita por Dulce Hogar) |
 | [ADR-15](ADR-15-deuda-residual-y-roadmap.md) | Priorización de la deuda residual y roadmap técnico de seis meses con disparadores | Aceptado |
 | [ADR-16](ADR-16-idempotencia-y-precision-de-cantidades.md) | Idempotencia opcional en la producción y precisión de 6 decimales (incremento II–03) | Aceptado |
+| [ADR-17](ADR-17-ventas-costeo-y-kardex-de-producto.md) | Contexto Ventas, costeo de recetas y kardex de producto terminado (v1.1) | Aceptado |
 
 ## Plantilla
 

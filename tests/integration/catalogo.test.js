@@ -77,7 +77,16 @@ test('recetas: reemplazar ingredientes, eliminar, y la materia prima queda libre
   assert.equal((await e.api.get(`/api/v1/recetas/${id}`).set(admin)).status, 404);
 });
 
-test('eliminar un producto elimina su receta en cascada', async () => {
-  assert.equal((await e.api.delete('/api/v1/productos/PT001').set(admin)).status, 204);
-  assert.equal((await e.api.get('/api/v1/recetas/1').set(admin)).status, 404);
+test('eliminar un producto sin historial elimina su receta en cascada; con ventas responde 409 (v1.1)', async () => {
+  // PT001 tiene ventas en la siembra: el kardex es auditoría y no se borra.
+  const bloqueado = await e.api.delete('/api/v1/productos/PT001').set(admin);
+  assert.equal(bloqueado.status, 409);
+  assert.match(bloqueado.body.title, /ventas, producciones o bajas/);
+  assert.equal((await e.api.get('/api/v1/recetas/1').set(admin)).status, 200);
+
+  assert.equal((await e.api.post('/api/v1/productos').set(admin).send(producto({ sku: 'PT070', stock: 3 }))).status, 201);
+  const rec = await e.api.post('/api/v1/recetas').set(admin).send({ productoSku: 'PT070', ingredientes: [{ codigoMateriaPrima: 'MP005', cantidad: 10, unidad: 'g' }] });
+  assert.equal(rec.status, 201);
+  assert.equal((await e.api.delete('/api/v1/productos/PT070').set(admin)).status, 204);
+  assert.equal((await e.api.get(`/api/v1/recetas/${rec.body.id}`).set(admin)).status, 404);
 });

@@ -57,6 +57,7 @@ export function validarProducto(d, { modo = 'crear' } = {}) {
   datos.stock = validarNoNegativo(errores, 'stock', d.stock, 'El stock');
   if (!errores.stock && !Number.isInteger(datos.stock)) errores.stock = 'El stock de productos debe ser un número entero.';
   datos.precio = validarNoNegativo(errores, 'precio', d.precio, 'El precio');
+  if (texto(d.costoUnitario) !== '') datos.costoUnitario = validarNoNegativo(errores, 'costoUnitario', d.costoUnitario, 'El costo');
   datos.caducidad = texto(d.caducidad);
   const f = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datos.caducidad);
   const fechaReal = f && new Date(Date.UTC(+f[1], +f[2] - 1, +f[3])).getUTCDate() === +f[3];
@@ -117,6 +118,11 @@ export function validarProduccion(d) {
   const nota = texto(d.nota);
   if (nota.length > 200) errores.nota = 'La nota admite máximo 200 caracteres.';
   else if (nota) datos.nota = nota;
+  const caducidad = texto(d.caducidad);
+  if (caducidad) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(caducidad)) errores.caducidad = 'Indica una fecha válida.';
+    else datos.caducidad = caducidad;
+  }
   return { errores, datos, valido: Object.keys(errores).length === 0 };
 }
 
@@ -127,4 +133,52 @@ export function validarCredenciales(d) {
   const contrasena = String(d.contrasena ?? '');
   if (contrasena.length < 8) errores.contrasena = 'La contraseña tiene al menos 8 caracteres.';
   return { errores, datos: { usuario, contrasena }, valido: Object.keys(errores).length === 0 };
+}
+
+const MOTIVOS_VALIDOS = new Set(['CONTEO_FISICO', 'MERMA', 'VENCIMIENTO', 'CORRECCION']);
+
+/** Ajuste por conteo físico. `entero`: los productos terminados se cuentan en unidades enteras. */
+export function validarAjuste(d, { entero = false } = {}) {
+  const errores = {};
+  const datos = {};
+  datos.stockContado = numeroDe(d.stockContado);
+  if (Number.isNaN(datos.stockContado) || datos.stockContado < 0) errores.stockContado = 'Indica lo que contaste (cero o más).';
+  else if (entero && !Number.isInteger(datos.stockContado)) errores.stockContado = 'Los productos se cuentan en unidades enteras.';
+  if (!MOTIVOS_VALIDOS.has(d.motivo)) errores.motivo = 'Selecciona el motivo del ajuste.';
+  else datos.motivo = d.motivo;
+  const nota = texto(d.nota);
+  if (nota.length > 200) errores.nota = 'La nota admite máximo 200 caracteres.';
+  else if (nota) datos.nota = nota;
+  return { errores, datos, valido: Object.keys(errores).length === 0 };
+}
+
+/**
+ * Líneas de una venta: [{ sku, cantidad, precioUnitario }] con texto crudo del formulario.
+ * El precio vacío significa "precio de lista". Detecta productos repetidos y cantidades por encima del stock.
+ */
+export function validarVenta(filas, { stockPorSku = new Map() } = {}) {
+  const erroresFilas = [];
+  const vistos = new Set();
+  const items = filas.map((f, i) => {
+    const e = {};
+    const sku = texto(f.sku);
+    if (!sku) e.sku = 'Selecciona un producto.';
+    else if (vistos.has(sku)) e.sku = 'Este producto ya está en otra línea.';
+    vistos.add(sku);
+    const cantidad = numeroDe(f.cantidad);
+    if (!Number.isInteger(cantidad) || cantidad < 1) e.cantidad = 'Entero mayor que cero.';
+    else if (stockPorSku.has(sku) && cantidad > stockPorSku.get(sku)) e.cantidad = `Solo hay ${stockPorSku.get(sku)}.`;
+    const item = { sku, cantidad };
+    if (texto(f.precioUnitario) !== '') {
+      const precio = numeroDe(f.precioUnitario);
+      if (Number.isNaN(precio) || precio < 0) e.precioUnitario = 'Precio inválido.';
+      else item.precioUnitario = precio;
+    }
+    erroresFilas[i] = e;
+    return item;
+  });
+  const errores = {};
+  if (items.length === 0) errores.general = 'Agrega al menos un producto.';
+  if (erroresFilas.some((e) => Object.keys(e).length)) errores.filas = erroresFilas;
+  return { errores, items, valido: Object.keys(errores).length === 0 };
 }

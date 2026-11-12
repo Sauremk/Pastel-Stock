@@ -79,6 +79,40 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # ── E2E (v1.1, DT-21): Chromium real contra la API y PostgreSQL reales ─────────
+  e2e:
+    name: e2e
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pastel_ci
+          POSTGRES_PASSWORD: ci-ephemeral-db
+          POSTGRES_DB: pastel_stock_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pastel_ci -d pastel_stock_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://pastel_ci:ci-ephemeral-db@127.0.0.1:5432/pastel_stock_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Navegador Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Flujos de venta, baja por vencimiento, conteo físico y permisos
+        run: npm run test:e2e
+
   # ── Báscula 3: SonarCloud + Quality Gate BLOQUEANTE (ADR-09) ───────────────────
   analysis:
     name: analysis

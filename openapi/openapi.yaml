@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: Pastel Stock API
-  version: 1.0.0
+  version: 1.1.0
   summary: API de inventario de materias primas, productos terminados y recetas para Dulce Hogar.
   description: 'Contrato **Design-First** de la API de Pastel Stock (monolito modular, Node.js + PostgreSQL).
 
-    Contextos delimitados (ADR-05): **Identidad y Acceso**, **Inventario**, **Catálogo y Producción**, **Reportes**.
+    Contextos delimitados (ADR-05, ADR-17): **Identidad y Acceso**, **Inventario**, **Catálogo y Producción**, **Ventas**, **Reportes**.
 
 
     **Seguridad:** todas las operaciones exigen `bearerAuth` (JWT) salvo `login`, `refresh` y `health`,
@@ -34,6 +34,8 @@ tags:
   description: Contexto Inventario de Materias Primas y Movimientos
 - name: Catálogo
   description: Contexto Catálogo de Productos y Recetas
+- name: Ventas
+  description: Contexto Ventas (v1.1)
 - name: Reportes
   description: Contexto Reportes y Analítica
 - name: Sistema
@@ -288,6 +290,10 @@ paths:
         schema:
           type: string
           pattern: ^MP[0-9]{3,}$
+      - name: tipo
+        in: query
+        schema:
+          $ref: '#/components/schemas/TipoMovimiento'
       - name: desde
         in: query
         schema:
@@ -533,6 +539,7 @@ paths:
           - materias
           - productos
           - recetas
+          - ventas
       - name: formato
         in: query
         required: true
@@ -731,6 +738,253 @@ paths:
           $ref: '#/components/responses/Conflicto409'
         '422':
           $ref: '#/components/responses/Validacion422'
+  /movimientos/ajustes:
+    post:
+      tags:
+      - Inventario
+      operationId: registrarAjusteMateria
+      summary: Ajustar el stock de una materia prima por conteo físico
+      x-roles:
+      - admin
+      - operador
+      description: Fija el stock al valor contado y deja la diferencia en el kardex (AJUSTE si sobra, AJUSTE_NEGATIVO si
+        falta) con su motivo. Si no hay diferencia no crea movimiento (movimientoId null). v1.1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AjusteSolicitud'
+      responses:
+        '201':
+          description: Ajuste aplicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AjusteResultado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /productos/{sku}/ajustes:
+    parameters:
+    - $ref: '#/components/parameters/SkuRuta'
+    post:
+      tags:
+      - Catálogo
+      operationId: ajustarProducto
+      summary: Ajustar el stock de un producto terminado (conteo físico, merma o baja por vencimiento)
+      x-roles:
+      - admin
+      - operador
+      description: Fija el stock al valor contado. Una disminución con motivo VENCIMIENTO queda en el kardex como BAJA.
+        Para dar de baja todo un producto vencido envíe stockContado 0 y motivo VENCIMIENTO. v1.1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AjusteProductoSolicitud'
+      responses:
+        '201':
+          description: Ajuste aplicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AjusteProductoResultado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /productos/{sku}/movimientos:
+    parameters:
+    - $ref: '#/components/parameters/SkuRuta'
+    get:
+      tags:
+      - Catálogo
+      operationId: listarMovimientosProducto
+      summary: Kardex del producto terminado
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de movimientos del producto (más reciente primero).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoProductoPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /recetas/{id}/costeo:
+    parameters:
+    - *id001
+    get:
+      tags:
+      - Catálogo
+      operationId: costearReceta
+      summary: Costo estándar y margen de una unidad del producto
+      x-roles:
+      - admin
+      - operador
+      - contador
+      description: Suma cada ingrediente convertido a la unidad de inventario por el costo actual del insumo, y lo compara
+        con el precio de venta del producto. v1.1.
+      responses:
+        '200':
+          description: Costeo de la receta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CosteoReceta'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /ventas:
+    post:
+      tags:
+      - Ventas
+      operationId: registrarVenta
+      summary: Registrar una venta de productos terminados
+      x-roles:
+      - admin
+      - operador
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      description: Descuenta el stock de cada producto en una sola transacción y congela precio y costo unitario en cada
+        línea (el margen histórico no cambia aunque luego cambien los precios). Falla con 409 si algún producto no
+        alcanza o está vencido. Acepta Idempotency-Key igual que producir. v1.1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VentaCrear'
+      responses:
+        '201':
+          description: Venta registrada (o repetición de una clave ya procesada).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaResultado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+    get:
+      tags:
+      - Ventas
+      operationId: listarVentas
+      summary: Listar ventas con sus líneas y el resumen del período
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - $ref: '#/components/parameters/Pagina'
+      - $ref: '#/components/parameters/Limite'
+      - name: desde
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: hasta
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Página de ventas (más reciente primero) y totales del filtro completo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaPagina'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /reportes/alertas:
+    get:
+      tags:
+      - Reportes
+      operationId: alertas
+      summary: Productos por vencer o vencidos con stock e ingredientes bajo su mínimo
+      x-roles:
+      - admin
+      - operador
+      - contador
+      parameters:
+      - name: dias
+        in: query
+        description: Ventana de aviso en días (por defecto 3).
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 30
+          default: 3
+      responses:
+        '200':
+          description: Alertas vigentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alertas'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /reportes/rentabilidad:
+    get:
+      tags:
+      - Reportes
+      operationId: rentabilidad
+      summary: Costo, margen y ventas de los últimos 30 días por producto
+      x-roles:
+      - admin
+      - contador
+      responses:
+        '200':
+          description: Rentabilidad por producto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rentabilidad'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
 components:
   securitySchemes:
     bearerAuth:
@@ -739,13 +993,22 @@ components:
       bearerFormat: JWT
       description: Access token JWT (HS256 en desarrollo; vida 15 min). Claims `sub`, `rol`, `iat`, `exp`.
   parameters:
+    SkuRuta:
+      name: sku
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^PT[0-9]{3,}$
+        examples:
+        - PT001
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: false
       description: >-
-        Clave opcional (8 a 64 caracteres, letras, números, guion o guion bajo) para reintentar una producción sin
-        duplicarla. Misma clave y mismo cuerpo devuelven la respuesta original con Idempotency-Replayed igual a true;
+        Clave opcional (8 a 64 caracteres, letras, números, guion o guion bajo) para reintentar una producción o una
+        venta sin duplicarla. Misma clave y mismo cuerpo devuelven la respuesta original con Idempotency-Replayed igual a true;
         misma clave con otro cuerpo responde 422. Solo se recuerdan las producciones exitosas.
       schema:
         type: string
@@ -1095,11 +1358,9 @@ components:
         codigo:
           type: string
         tipo:
-          type: string
-          enum:
-          - ENTRADA
-          - SALIDA
-          - AJUSTE
+          $ref: '#/components/schemas/TipoMovimiento'
+        motivo:
+          $ref: '#/components/schemas/MotivoAjuste'
         cantidad:
           type: number
           exclusiveMinimum: 0
@@ -1155,6 +1416,11 @@ components:
         caducidad:
           type: string
           format: date
+        costoUnitario:
+          type: number
+          minimum: 0
+          description: Costo de una unidad en COP. Opcional al crear o editar (útil para productos sin receta); con receta
+            se recalcula en cada producción como promedio ponderado.
     ProductoCrear:
       allOf:
       - $ref: '#/components/schemas/ProductoBase'
@@ -1258,7 +1524,8 @@ components:
           $ref: '#/components/schemas/Paginacion'
     Dashboard:
       type: object
-      description: 'KPI calculados desde datos reales (DT-10). Sin ventas simuladas: el módulo de ventas está en el roadmap.'
+      description: 'KPI calculados desde datos reales (DT-10). Desde v1.1 incluye ventas, costo de ventas, margen bruto y ROI
+        calculados a partir de las ventas registradas.'
       required:
       - valorInventarioInsumos
       - comprasUltimos30Dias
@@ -1270,7 +1537,73 @@ components:
       - comprasUltimos7Dias
       - stockPorCategoria
       - topProductosPorValor
+      - ventasUltimos30Dias
+      - numeroVentasUltimos30Dias
+      - costoVentasUltimos30Dias
+      - margenBrutoUltimos30Dias
+      - margenPorcentaje30Dias
+      - roi30Dias
+      - perdidasUltimos30Dias
+      - ventasUltimos7Dias
+      - topProductosVendidos
       properties:
+        ventasUltimos30Dias:
+          type: number
+          description: Σ ventas (precio congelado × cantidad) en 30 días (COP).
+        numeroVentasUltimos30Dias:
+          type: integer
+        costoVentasUltimos30Dias:
+          type: number
+          description: Σ costo congelado de lo vendido en 30 días (COP).
+        margenBrutoUltimos30Dias:
+          type: number
+        margenPorcentaje30Dias:
+          type:
+          - number
+          - 'null'
+          description: Margen bruto / ventas × 100. null si no hubo ventas.
+        roi30Dias:
+          type:
+          - number
+          - 'null'
+          description: Margen bruto / costo de ventas × 100. null si el costo es 0.
+        perdidasUltimos30Dias:
+          type: number
+          description: Bajas y ajustes negativos (producto e insumos) valorizados a costo en 30 días (COP).
+        ventasUltimos7Dias:
+          type: array
+          items:
+            type: object
+            required:
+            - fecha
+            - total
+            - margen
+            properties:
+              fecha:
+                type: string
+                format: date
+              total:
+                type: number
+              margen:
+                type: number
+        topProductosVendidos:
+          type: array
+          items:
+            type: object
+            required:
+            - sku
+            - nombre
+            - unidades
+            - total
+            properties:
+              sku:
+                type: string
+              nombre:
+                type: string
+              unidades:
+                type: integer
+              total:
+                type: number
         valorInventarioInsumos:
           type: number
           description: Σ stock × costo de materias primas (COP).
@@ -1392,6 +1725,10 @@ components:
         nota:
           type: string
           maxLength: 200
+        caducidad:
+          type: string
+          format: date
+          description: Nueva fecha de caducidad del producto (la del lote recién producido). Opcional.
     ProducirResultado:
       type: object
       required:
@@ -1399,6 +1736,17 @@ components:
       - stockProducto
       - consumos
       properties:
+        costoLote:
+          type: number
+          description: Σ insumos consumidos × costo (COP). v1.1.
+        costoUnitarioLote:
+          type: number
+        costoPromedioProducto:
+          type: number
+          description: Costo promedio ponderado del producto después de producir.
+        caducidadProducto:
+          type: string
+          format: date
         productoSku:
           type: string
         stockProducto:
@@ -1421,3 +1769,506 @@ components:
                 type: number
               estado:
                 $ref: '#/components/schemas/EstadoStock'
+    TipoMovimiento:
+      type: string
+      enum:
+      - ENTRADA
+      - SALIDA
+      - AJUSTE
+      - AJUSTE_NEGATIVO
+    MotivoAjuste:
+      type: string
+      enum:
+      - STOCK_INICIAL
+      - CONTEO_FISICO
+      - MERMA
+      - VENCIMIENTO
+      - CORRECCION
+    MotivoAjusteSolicitud:
+      type: string
+      enum:
+      - CONTEO_FISICO
+      - MERMA
+      - VENCIMIENTO
+      - CORRECCION
+    AjusteSolicitud:
+      type: object
+      required:
+      - codigo
+      - stockContado
+      - motivo
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+          pattern: ^MP[0-9]{3,}$
+        stockContado:
+          type: number
+          minimum: 0
+          maximum: 100000000
+          description: Lo que se contó físicamente, en la unidad de la materia prima.
+        motivo:
+          $ref: '#/components/schemas/MotivoAjusteSolicitud'
+        nota:
+          type: string
+          maxLength: 200
+    AjusteResultado:
+      type: object
+      required:
+      - codigo
+      - stockAnterior
+      - stockNuevo
+      - diferencia
+      - valorDiferencia
+      - estado
+      - movimientoId
+      properties:
+        codigo:
+          type: string
+        stockAnterior:
+          type: number
+        stockNuevo:
+          type: number
+        diferencia:
+          type: number
+        valorDiferencia:
+          type: number
+          description: Diferencia × costo unitario (COP). Negativa si falta mercancía.
+        estado:
+          $ref: '#/components/schemas/EstadoStock'
+        movimientoId:
+          type:
+          - integer
+          - 'null'
+    AjusteProductoSolicitud:
+      type: object
+      required:
+      - stockContado
+      - motivo
+      additionalProperties: false
+      properties:
+        stockContado:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+        motivo:
+          $ref: '#/components/schemas/MotivoAjusteSolicitud'
+        nota:
+          type: string
+          maxLength: 200
+    AjusteProductoResultado:
+      type: object
+      required:
+      - sku
+      - stockAnterior
+      - stockNuevo
+      - diferencia
+      - movimientoId
+      properties:
+        sku:
+          type: string
+        stockAnterior:
+          type: integer
+        stockNuevo:
+          type: integer
+        diferencia:
+          type: integer
+        valorDiferencia:
+          type: number
+        movimientoId:
+          type:
+          - integer
+          - 'null'
+    MovimientoProducto:
+      type: object
+      required:
+      - id
+      - sku
+      - tipo
+      - cantidad
+      - costoUnitario
+      - creadoEn
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        tipo:
+          type: string
+          enum:
+          - PRODUCCION
+          - VENTA
+          - BAJA
+          - AJUSTE
+          - AJUSTE_NEGATIVO
+        cantidad:
+          type: integer
+          minimum: 1
+        costoUnitario:
+          type: number
+        motivo:
+          $ref: '#/components/schemas/MotivoAjuste'
+        ventaId:
+          type: integer
+        registradoPor:
+          type: string
+        nota:
+          type: string
+        creadoEn:
+          type: string
+          format: date-time
+    MovimientoProductoPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoProducto'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    CosteoReceta:
+      type: object
+      required:
+      - recetaId
+      - productoSku
+      - productoNombre
+      - precioVenta
+      - costoUnitario
+      - margenUnitario
+      - margenPorcentaje
+      - ingredientes
+      properties:
+        recetaId:
+          type: integer
+        productoSku:
+          type: string
+        productoNombre:
+          type: string
+        precioVenta:
+          type: number
+        costoUnitario:
+          type: number
+        margenUnitario:
+          type: number
+        margenPorcentaje:
+          type:
+          - number
+          - 'null'
+        ingredientes:
+          type: array
+          items:
+            type: object
+            required:
+            - codigoMateriaPrima
+            - nombre
+            - cantidad
+            - unidad
+            - cantidadEnUnidadInventario
+            - unidadInventario
+            - costoUnitarioInsumo
+            - costo
+            properties:
+              codigoMateriaPrima:
+                type: string
+              nombre:
+                type: string
+              cantidad:
+                type: number
+              unidad:
+                $ref: '#/components/schemas/UnidadMedida'
+              cantidadEnUnidadInventario:
+                type: number
+              unidadInventario:
+                $ref: '#/components/schemas/UnidadMedida'
+              costoUnitarioInsumo:
+                type: number
+              costo:
+                type: number
+    VentaCrear:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required:
+            - sku
+            - cantidad
+            additionalProperties: false
+            properties:
+              sku:
+                type: string
+                pattern: ^PT[0-9]{3,}$
+              cantidad:
+                type: integer
+                minimum: 1
+                maximum: 10000
+              precioUnitario:
+                type: number
+                minimum: 0
+                maximum: 100000000
+                description: Precio pactado (descuentos). Si se omite se usa el precio de lista del producto.
+        nota:
+          type: string
+          maxLength: 200
+    VentaLinea:
+      type: object
+      required:
+      - sku
+      - nombre
+      - cantidad
+      - precioUnitario
+      - costoUnitario
+      - subtotal
+      properties:
+        sku:
+          type: string
+        nombre:
+          type: string
+        cantidad:
+          type: integer
+        precioUnitario:
+          type: number
+        costoUnitario:
+          type: number
+        subtotal:
+          type: number
+    VentaResultado:
+      type: object
+      required:
+      - id
+      - creadoEn
+      - total
+      - costoTotal
+      - margen
+      - items
+      - stockRestante
+      properties:
+        id:
+          type: integer
+        creadoEn:
+          type: string
+          format: date-time
+        total:
+          type: number
+        costoTotal:
+          type: number
+        margen:
+          type: number
+        nota:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VentaLinea'
+        stockRestante:
+          type: array
+          items:
+            type: object
+            required:
+            - sku
+            - stock
+            properties:
+              sku:
+                type: string
+              stock:
+                type: integer
+    Venta:
+      type: object
+      required:
+      - id
+      - creadoEn
+      - total
+      - costoTotal
+      - margen
+      - items
+      properties:
+        id:
+          type: integer
+        creadoEn:
+          type: string
+          format: date-time
+        total:
+          type: number
+        costoTotal:
+          type: number
+        margen:
+          type: number
+        nota:
+          type: string
+        registradoPor:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VentaLinea'
+    VentaPagina:
+      type: object
+      required:
+      - datos
+      - paginacion
+      - resumen
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Venta'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+        resumen:
+          type: object
+          required:
+          - total
+          - costo
+          - margen
+          properties:
+            total:
+              type: number
+            costo:
+              type: number
+            margen:
+              type: number
+    ProductoEnRiesgo:
+      type: object
+      required:
+      - sku
+      - nombre
+      - categoria
+      - stock
+      - caducidad
+      - diasRestantes
+      - valorACosto
+      - valorAPrecio
+      properties:
+        sku:
+          type: string
+        nombre:
+          type: string
+        categoria:
+          $ref: '#/components/schemas/CategoriaProducto'
+        stock:
+          type: integer
+        caducidad:
+          type: string
+          format: date
+        diasRestantes:
+          type: integer
+          description: Negativo si ya venció.
+        valorACosto:
+          type: number
+        valorAPrecio:
+          type: number
+    Alertas:
+      type: object
+      required:
+      - fecha
+      - diasAviso
+      - vencidos
+      - porVencer
+      - valorEnRiesgoACosto
+      - ingredientesCriticos
+      - total
+      properties:
+        fecha:
+          type: string
+          format: date
+        diasAviso:
+          type: integer
+        vencidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoEnRiesgo'
+        porVencer:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoEnRiesgo'
+        valorEnRiesgoACosto:
+          type: number
+        ingredientesCriticos:
+          type: array
+          items:
+            type: object
+            required:
+            - codigo
+            - nombre
+            - unidad
+            - stock
+            - minimo
+            - estado
+            properties:
+              codigo:
+                type: string
+              nombre:
+                type: string
+              unidad:
+                type: string
+              stock:
+                type: number
+              minimo:
+                type: number
+              estado:
+                $ref: '#/components/schemas/EstadoStock'
+        total:
+          type: integer
+    Rentabilidad:
+      type: object
+      required:
+      - fecha
+      - datos
+      properties:
+        fecha:
+          type: string
+          format: date
+        datos:
+          type: array
+          items:
+            type: object
+            required:
+            - sku
+            - nombre
+            - categoria
+            - precio
+            - costoReceta
+            - costoPromedio
+            - margenUnitario
+            - margenPorcentaje
+            - unidadesVendidas30Dias
+            - ventas30Dias
+            - margen30Dias
+            properties:
+              sku:
+                type: string
+              nombre:
+                type: string
+              categoria:
+                type: string
+              precio:
+                type: number
+              costoReceta:
+                type:
+                - number
+                - 'null'
+                description: Costo estándar con los costos actuales de los insumos; null si el producto no tiene receta.
+              costoPromedio:
+                type: number
+                description: Costo promedio ponderado de lo producido.
+              margenUnitario:
+                type: number
+              margenPorcentaje:
+                type:
+                - number
+                - 'null'
+              unidadesVendidas30Dias:
+                type: integer
+              ventas30Dias:
+                type: number
+              margen30Dias:
+                type: number

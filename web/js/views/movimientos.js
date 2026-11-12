@@ -5,36 +5,41 @@ import {
 } from '../ui.js';
 import { formatoNumero, formatoFechaHora, infoEstado, mensajeDeError, hoyISO } from '../format.js';
 import { validarEntrada } from '../validacion.js';
+import { TEXTO_MOTIVO } from '../catalogos.js';
 
-const CLASE_TIPO = { ENTRADA: 'entrada', SALIDA: 'salida', AJUSTE: 'ajuste' };
-const TEXTO_TIPO = { ENTRADA: 'Entrada', SALIDA: 'Salida', AJUSTE: 'Ajuste' };
+const CLASE_TIPO = { ENTRADA: 'entrada', SALIDA: 'salida', AJUSTE: 'ajuste', AJUSTE_NEGATIVO: 'ajuste-neg' };
+const TEXTO_TIPO = { ENTRADA: 'Entrada', SALIDA: 'Salida', AJUSTE: 'Ajuste +', AJUSTE_NEGATIVO: 'Ajuste −' };
+const RESTA = new Set(['SALIDA', 'AJUSTE_NEGATIVO']);
 
 export function crearVista(ctx) {
   const { api, auth } = ctx;
   const puedeRegistrar = auth.puede('movimientos');
-  const estado = { pagina: 1, limite: 20, codigo: '', desde: '', hasta: '' };
+  const estado = { pagina: 1, limite: 20, codigo: '', tipo: '', desde: '', hasta: '' };
   let marcaCarga = 0;
   let materias = [];
 
   const zonaFormulario = h('div', {});
   const zonaKardex = h('div', {});
   const filtroCodigo = selectControl([], { placeholder: 'Todas', 'aria-label': 'Filtrar por materia prima' });
+  const filtroTipo = selectControl(Object.entries(TEXTO_TIPO).map(([valor, texto]) => ({ valor, texto })), { placeholder: 'Todos', 'aria-label': 'Filtrar por tipo' });
   const filtroDesde = h('input', { type: 'date', max: hoyISO() });
   const filtroHasta = h('input', { type: 'date', max: hoyISO() });
 
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-movimientos' },
-    encabezadoVista('Movimientos de inventario'),
+    encabezadoVista('Movimientos de inventario', 'Entradas de proveedor y kardex de materias primas. Los ajustes por conteo se hacen desde Materias primas (⚖️).'),
     puedeRegistrar ? h('div', { class: 'panel' }, h('h2', {}, 'Registrar entrada'), zonaFormulario) : null,
     h('div', { class: 'panel' },
       h('h2', {}, 'Kardex'),
       h('div', { class: 'barra-filtros' },
         h('label', {}, 'Materia prima', filtroCodigo),
+        h('label', {}, 'Tipo', filtroTipo),
         h('label', {}, 'Desde', filtroDesde),
         h('label', {}, 'Hasta', filtroHasta)),
       zonaKardex));
   el.querySelector('h1').id = 'titulo-movimientos';
 
   filtroCodigo.addEventListener('change', () => { estado.codigo = filtroCodigo.value; estado.pagina = 1; cargarKardex(); });
+  filtroTipo.addEventListener('change', () => { estado.tipo = filtroTipo.value; estado.pagina = 1; cargarKardex(); });
   filtroDesde.addEventListener('change', () => { estado.desde = filtroDesde.value; estado.pagina = 1; cargarKardex(); });
   filtroHasta.addEventListener('change', () => { estado.hasta = filtroHasta.value; estado.pagina = 1; cargarKardex(); });
 
@@ -92,7 +97,7 @@ export function crearVista(ctx) {
     const marca = ++marcaCarga;
     reemplazarHijos(zonaKardex, cargando());
     try {
-      const r = await api.get('/movimientos', { pagina: estado.pagina, limite: estado.limite, codigo: estado.codigo, desde: estado.desde, hasta: estado.hasta });
+      const r = await api.get('/movimientos', { pagina: estado.pagina, limite: estado.limite, codigo: estado.codigo, tipo: estado.tipo, desde: estado.desde, hasta: estado.hasta });
       if (marca !== marcaCarga) return;
       if (r.datos.length === 0) {
         reemplazarHijos(zonaKardex, vacio('No hay movimientos para los filtros seleccionados.', '📒'));
@@ -102,12 +107,13 @@ export function crearVista(ctx) {
       reemplazarHijos(zonaKardex,
         tabla({
           descripcion: 'Kardex de movimientos de inventario',
-          columnas: [{ titulo: 'Fecha y hora' }, { titulo: 'Materia prima' }, { titulo: 'Tipo' }, { titulo: 'Cantidad', num: true }, { titulo: 'Proveedor' }, { titulo: 'Registrado por' }, { titulo: 'Nota' }],
+          columnas: [{ titulo: 'Fecha y hora' }, { titulo: 'Materia prima' }, { titulo: 'Tipo' }, { titulo: 'Cantidad', num: true }, { titulo: 'Proveedor' }, { titulo: 'Registrado por' }, { titulo: 'Motivo / nota' }],
           filas: r.datos.map((m) => ({ celdas: [
             formatoFechaHora(m.creadoEn),
             h('span', {}, nombres.get(m.codigo) ?? m.codigo, h('span', { class: 'sub' }, m.codigo)),
             insignia(TEXTO_TIPO[m.tipo] ?? m.tipo, CLASE_TIPO[m.tipo]),
-            formatoNumero(m.cantidad), m.proveedor ?? '—', m.registradoPor ?? '—', m.nota ?? '',
+            `${RESTA.has(m.tipo) ? '−' : '+'}${formatoNumero(m.cantidad)}`, m.proveedor ?? '—', m.registradoPor ?? '—',
+            [...new Set([TEXTO_MOTIVO[m.motivo], m.nota].filter(Boolean))].join(' · ') || '—',
           ] })),
         }),
         paginador({ ...r.paginacion, alCambiar: (p) => { estado.pagina = p; cargarKardex(); } }));

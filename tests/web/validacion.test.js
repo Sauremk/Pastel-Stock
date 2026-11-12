@@ -86,3 +86,25 @@ test('validarCredenciales: mínimos del contrato', () => {
   assert.ok(validarCredenciales({ usuario: 'admin', contrasena: '1234567' }).errores.contrasena);
   assert.equal(validarCredenciales({ usuario: '  admin  ', contrasena: 'x'.repeat(8) }).datos.usuario, 'admin');
 });
+
+test('validarAjuste: stock contado ≥ 0, entero para productos, motivo del catálogo', async () => {
+  const { validarAjuste } = await import('../../web/js/validacion.js');
+  assert.deepEqual(validarAjuste({ stockContado: '24,5', motivo: 'MERMA', nota: ' bolsa rota ' }).datos, { stockContado: 24.5, motivo: 'MERMA', nota: 'bolsa rota' });
+  assert.ok(validarAjuste({ stockContado: '-1', motivo: 'MERMA' }).errores.stockContado);
+  assert.ok(validarAjuste({ stockContado: '1.5', motivo: 'MERMA' }, { entero: true }).errores.stockContado);
+  assert.ok(validarAjuste({ stockContado: '3', motivo: 'STOCK_INICIAL' }).errores.motivo);
+  assert.equal(validarAjuste({ stockContado: '0', motivo: 'VENCIMIENTO' }, { entero: true }).valido, true);
+});
+
+test('validarVenta: producto obligatorio y sin repetir, cantidad entera ≤ stock, precio vacío = de lista', async () => {
+  const { validarVenta } = await import('../../web/js/validacion.js');
+  const stockPorSku = new Map([['PT001', 8], ['PT003', 60]]);
+  const ok = validarVenta([{ sku: 'PT001', cantidad: '2', precioUnitario: '' }, { sku: 'PT003', cantidad: '10', precioUnitario: '700' }], { stockPorSku });
+  assert.equal(ok.valido, true);
+  assert.deepEqual(ok.items, [{ sku: 'PT001', cantidad: 2 }, { sku: 'PT003', cantidad: 10, precioUnitario: 700 }]);
+  const mal = validarVenta([{ sku: 'PT001', cantidad: '9' }, { sku: 'PT001', cantidad: '1' }, { sku: '', cantidad: '0' }], { stockPorSku });
+  assert.equal(mal.errores.filas[0].cantidad, 'Solo hay 8.');
+  assert.match(mal.errores.filas[1].sku, /otra línea/);
+  assert.ok(mal.errores.filas[2].sku && mal.errores.filas[2].cantidad);
+  assert.ok(validarVenta([]).errores.general);
+});
