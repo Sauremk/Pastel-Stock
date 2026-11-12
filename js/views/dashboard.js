@@ -3,6 +3,7 @@
 // podio de más vendidos, pulso de actividad reciente y barras de insumos. Todo respeta prefers-reduced-motion.
 import { h, reemplazarHijos, bannerError } from '../ui.js';
 import { formatoCOP, formatoCOPCorto, formatoNumero, formatoFecha } from '../format.js';
+import { listaPasos } from './ayuda.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...hijos) => {
@@ -128,12 +129,6 @@ export function crearVista(ctx) {
     const chispas = h('div', { class: 'db-chispas', 'aria-hidden': 'true' },
       ...Array.from({ length: 14 }, (_, i) => h('i', { style: { '--x': `${(i * 37) % 100}%`, '--d': `${6 + (i % 5) * 1.7}s`, '--r': `${(i * 47) % 180}deg`, '--c': ['#F7A8C8', '#F2C36B', '#9EE6C2', '#F6EEE4', '#B9CCFF'][i % 5], '--retraso': `${-(i * 0.9)}s` } })));
 
-    const acciones = h('div', { class: 'db-acciones' },
-      auth.puede('ventas') ? h('a', { class: 'db-boton db-boton-claro', href: '#/ventas' }, '＋ Nueva venta') : null,
-      h('a', { class: 'db-boton db-boton-vidrio', href: '#/alertas' }, '🔔 Alertas',
-        d.totalIngredientesCriticos + d.productosVencidos + d.productosPorVencer > 0
-          ? h('span', { class: 'db-punto-vivo', 'aria-label': 'hay alertas' }) : null),
-      auth.puede('rentabilidad') ? h('a', { class: 'db-boton db-boton-vidrio', href: '#/rentabilidad' }, '📈 Márgenes') : null);
 
     return h('header', { class: 'db-portada db-entra', style: { '--i': '0' } },
       h('div', { class: 'db-aurora', 'aria-hidden': 'true' }, h('span'), h('span'), h('span')),
@@ -142,16 +137,15 @@ export function crearVista(ctx) {
         h('div', { class: 'db-portada-izq' },
           h('p', { class: 'db-sobretitulo' }, h('span', { class: 'db-punto-vivo' }), ' En vivo · ', hoyTexto, ' · ', relojEl),
           h('h1', { id: 'titulo-dashboard', tabindex: '-1' }, `${saludo()}${nombre ? `, ${nombre}` : ''} `, h('span', { class: 'db-mano', 'aria-hidden': 'true' }, '👋')),
-          h('p', { class: 'db-bajada' }, 'Así va Dulce Hogar en los últimos 30 días.'),
-          acciones),
+          h('p', { class: 'db-bajada' }, 'Así va Dulce Hogar en los últimos 30 días.')),
         h('div', { class: 'db-portada-der' },
-          h('p', { class: 'db-etiqueta' }, 'Ventas · 30 días'),
+          h('p', { class: 'db-etiqueta' }, 'Vendiste en 30 días'),
           h('p', { class: 'db-cifra-gigante' }, contador(d.ventasUltimos30Dias, (v) => formatoCOP(Math.round(v)), { duracion: 1800 })),
           curvaVentas(d.ventasUltimos7Dias),
           h('div', { class: 'db-chips' },
-            h('span', { class: 'db-chip' }, '💰 Margen ', h('strong', {}, formatoCOP(d.margenBrutoUltimos30Dias))),
+            h('span', { class: 'db-chip' }, '💰 Ganaste ', h('strong', {}, formatoCOP(d.margenBrutoUltimos30Dias))),
             h('span', { class: 'db-chip' }, '🧾 ', h('strong', {}, formatoNumero(d.numeroVentasUltimos30Dias)), ' ventas'),
-            h('span', { class: 'db-chip' }, '🎟️ Ticket ', h('strong', {}, formatoCOP(Math.round(ticket)))),
+            h('span', { class: 'db-chip' }, '🎟️ Promedio por venta ', h('strong', {}, formatoCOP(Math.round(ticket)))),
             mejorDia?.total > 0 ? h('span', { class: 'db-chip' }, '🔥 Mejor día ', h('strong', {}, formatoFecha(mejorDia.fecha).slice(0, 5))) : null))));
   }
 
@@ -161,15 +155,49 @@ export function crearVista(ctx) {
     const optimos = Math.max(0, totalMp - d.totalIngredientesCriticos);
     const totalPt = d.caducidad.vigentes + d.caducidad.porVencer + d.caducidad.vencidos;
     return h('div', { class: 'db-anillos' },
-      anillo({ porcentaje: d.margenPorcentaje30Dias, etiqueta: 'Margen bruto', ayuda: 'de cada peso vendido', valorTexto: d.margenPorcentaje30Dias === null ? 'sin ventas' : `${d.margenPorcentaje30Dias} %`, color: 'db-g-frambuesa', retraso: 0 }),
+      anillo({ porcentaje: d.margenPorcentaje30Dias, etiqueta: 'Ganancia', ayuda: 'de cada peso que vendes', valorTexto: d.margenPorcentaje30Dias === null ? 'sin ventas' : `${d.margenPorcentaje30Dias} %`, color: 'db-g-frambuesa', retraso: 0 }),
       // El anillo del ROI se llena sobre una escala de 0 a 300 % (un ROI de 300 % o más lo completa); el centro muestra el valor real.
-      anillo({ porcentaje: d.roi30Dias === null ? null : Math.min(100, d.roi30Dias / 3), centro: d.roi30Dias, etiqueta: 'ROI', ayuda: 'ganancia por cada peso de costo', valorTexto: d.roi30Dias === null ? 'sin datos' : `${d.roi30Dias} %`, color: 'db-g-caramelo', retraso: 90 }),
-      anillo({ porcentaje: pct(optimos, totalMp), etiqueta: 'Salud del inventario', ayuda: `${optimos} de ${totalMp} insumos en óptimo`, valorTexto: `${pct(optimos, totalMp) ?? 0} %`, color: 'db-g-menta', retraso: 180 }),
-      anillo({ porcentaje: pct(d.caducidad.vigentes, totalPt), etiqueta: 'Frescura', ayuda: `${d.caducidad.vigentes} de ${totalPt} productos vigentes`, valorTexto: `${pct(d.caducidad.vigentes, totalPt) ?? 0} %`, color: 'db-g-cielo', retraso: 270 }),
+      anillo({ porcentaje: d.roi30Dias === null ? null : Math.min(100, d.roi30Dias / 3), centro: d.roi30Dias, etiqueta: 'Rendimiento', ayuda: 'lo que ganas sobre lo que gastas', valorTexto: d.roi30Dias === null ? 'sin datos' : `${d.roi30Dias} %`, color: 'db-g-caramelo', retraso: 90 }),
+      anillo({ porcentaje: pct(optimos, totalMp), etiqueta: 'Ingredientes', ayuda: `${optimos} de ${totalMp} con suficiente cantidad`, valorTexto: `${pct(optimos, totalMp) ?? 0} %`, color: 'db-g-menta', retraso: 180 }),
+      anillo({ porcentaje: pct(d.caducidad.vigentes, totalPt), etiqueta: 'Frescura', ayuda: `${d.caducidad.vigentes} de ${totalPt} productos lejos de vencer`, valorTexto: `${pct(d.caducidad.vigentes, totalPt) ?? 0} %`, color: 'db-g-cielo', retraso: 270 }),
       // Degradados compartidos por los anillos (un solo <defs> en el documento)
       s('svg', { width: 0, height: 0, style: 'position:absolute', 'aria-hidden': 'true' }, s('defs', {},
         ...[['db-g-frambuesa', '#F28DB6', '#B8336A'], ['db-g-caramelo', '#F6C177', '#C2621F'], ['db-g-menta', '#7FE0B0', '#1F7A4D'], ['db-g-cielo', '#9DBBF5', '#2E5AAC']]
           .map(([id, a, b]) => s('linearGradient', { id, x1: 0, y1: 0, x2: 1, y2: 1 }, s('stop', { offset: '0', 'stop-color': a }), s('stop', { offset: '1', 'stop-color': b }))))));
+  }
+
+  // ---------------------------------------------------------------- acciones rápidas (lo primero que busca una persona nueva)
+  function accionesRapidas(d) {
+    const pendientes = d.totalIngredientesCriticos + d.productosVencidos + d.productosPorVencer;
+    const opciones = [
+      auth.puede('ventas') && ['#/ventas/nueva', '🛒', 'Registrar una venta', 'Cada vez que vendas', 'frambuesa'],
+      auth.puede('producir') && ['#/recetas/hornear', '🧁', 'Hornear', 'Descuenta los ingredientes solo', 'caramelo'],
+      auth.puede('movimientos') && ['#/movimientos/entrada', '📦', 'Llegaron ingredientes', 'Anota lo que te trajeron', 'cielo'],
+      auth.puede('ajustes') && ['#/materias', '⚖️', 'Contar el inventario', 'Corrige si algo no cuadra', 'menta'],
+      !auth.puede('ventas') && ['#/ventas', '🧾', 'Ver las ventas', 'Qué se vendió y cuándo', 'frambuesa'],
+      auth.puede('rentabilidad') && !auth.puede('producir') && ['#/rentabilidad', '📈', 'Ver ganancias', 'Cuánto deja cada producto', 'menta'],
+      !auth.puede('ajustes') && ['#/alertas', '🔔', 'Ver avisos', pendientes ? `${pendientes} para revisar` : 'Todo en orden', 'alerta'],
+    ].filter(Boolean).slice(0, 4);
+    return h('section', { class: 'db-rapidas db-entra', style: { '--i': '2' }, 'aria-labelledby': 'db-rapidas-t' },
+      h('h2', { id: 'db-rapidas-t', class: 'db-rapidas-titulo' }, '¿Qué quieres hacer?'),
+      h('div', { class: 'db-rapidas-grid' }, ...opciones.map(([href, icono, titulo, ayuda, tono], i) => h('a', { class: ['db-rapida', 'db-brillo'], href, style: { '--i': String(i) } },
+        h('span', { class: ['db-rapida-icono', `db-tono-${tono}`], 'aria-hidden': 'true' }, icono),
+        h('span', { class: 'db-rapida-texto' }, h('strong', {}, titulo), h('span', {}, ayuda)),
+        h('span', { class: 'db-rapida-flecha', 'aria-hidden': 'true' }, '→')))));
+  }
+
+  // Guía de bienvenida: se muestra la primera vez que cada usuario entra en este dispositivo.
+  const claveGuia = () => `pastel-stock.guia-vista.${auth.usuario()?.nombre ?? 'x'}`;
+  function guiaBienvenida() {
+    let vista = false;
+    try { vista = localStorage.getItem(claveGuia()) === '1'; } catch { vista = true; }
+    if (vista) return null;
+    const tarjeta = h('section', { class: 'db-guia db-entra', style: { '--i': '1' }, 'aria-labelledby': 'db-guia-t' },
+      h('div', { class: 'db-guia-cab' }, h('span', { class: 'db-guia-emoji', 'aria-hidden': 'true' }, '👋'),
+        h('div', {}, h('h2', { id: 'db-guia-t' }, '¿Primera vez? Es muy fácil'), h('p', {}, 'Con estas cuatro cosas ya sabes usar Pastel Stock.'))),
+      listaPasos(),
+      h('button', { type: 'button', class: 'btn', onClick: () => { try { localStorage.setItem(claveGuia(), '1'); } catch { /* sin almacenamiento */ } tarjeta.remove(); } }, '¡Entendido, empecemos!'));
+    return tarjeta;
   }
 
   // ---------------------------------------------------------------- tarjetas de cifras
@@ -180,10 +208,10 @@ export function crearVista(ctx) {
       h('span', { class: 'db-tarjeta-valor' }, contador(valor, (v) => formatoCOP(Math.round(v)), { retraso: 200 + i * 80 })),
       h('span', { class: 'db-tarjeta-nota' }, nota));
     return h('div', { class: 'db-tarjetas' },
-      t(0, '🧂', 'caramelo', 'Insumos en bodega', d.valorInventarioInsumos, 'Stock × costo', '#/materias'),
-      t(1, '🎂', 'frambuesa', 'Producto terminado', d.valorProductosTerminados, 'Stock × precio de venta', '#/productos'),
-      t(2, '🛒', 'cielo', 'Compras · 30 días', d.comprasUltimos30Dias, 'Entradas de proveedor', '#/movimientos'),
-      t(3, '🗑️', d.perdidasUltimos30Dias > 0 ? 'alerta' : 'menta', 'Pérdidas · 30 días', d.perdidasUltimos30Dias, d.perdidasUltimos30Dias > 0 ? 'Bajas y mermas a costo' : 'Sin pérdidas, ¡bien!', '#/alertas'));
+      t(0, '🧂', 'caramelo', 'Ingredientes en bodega', d.valorInventarioInsumos, 'Lo que costaron', '#/materias'),
+      t(1, '🎂', 'frambuesa', 'Productos listos', d.valorProductosTerminados, 'Lo que valen al venderlos', '#/productos'),
+      t(2, '🛒', 'cielo', 'Compraste (30 días)', d.comprasUltimos30Dias, 'Ingredientes que llegaron', '#/movimientos'),
+      t(3, '🗑️', d.perdidasUltimos30Dias > 0 ? 'alerta' : 'menta', 'Se perdió (30 días)', d.perdidasUltimos30Dias, d.perdidasUltimos30Dias > 0 ? 'Vencidos y dañados' : 'Nada se perdió, ¡bien!', '#/alertas'));
   }
 
   // ---------------------------------------------------------------- podio de más vendidos
@@ -220,17 +248,17 @@ export function crearVista(ctx) {
   function insumos(d) {
     const lista = d.ingredientesCriticos;
     return h('section', { class: 'db-panel db-entra', style: { '--i': '11' }, 'aria-labelledby': 'db-insumos-t' },
-      h('div', { class: 'db-panel-cab' }, h('h2', { id: 'db-insumos-t' }, 'Insumos que piden atención'), h('a', { class: 'db-enlace', href: '#/alertas' }, 'Ver alertas →')),
-      lista.length === 0 ? h('p', { class: 'db-vacio' }, '✨ Todo el inventario está por encima de su mínimo.') : h('ul', { class: 'db-insumos' },
+      h('div', { class: 'db-panel-cab' }, h('h2', { id: 'db-insumos-t' }, 'Ingredientes por comprar'), h('a', { class: 'db-enlace', href: '#/alertas' }, 'Ver alertas →')),
+      lista.length === 0 ? h('p', { class: 'db-vacio' }, '✨ Tienes suficiente de todos los ingredientes.') : h('ul', { class: 'db-insumos' },
         ...lista.map((m, i) => {
           const nivel = m.minimo > 0 ? Math.min(100, (m.stock / m.minimo) * 100) : 100;
           return h('li', { class: ['db-insumo', m.estado === 'CRITICO' ? 'db-insumo-critico' : 'db-insumo-bajo'], style: { '--i': String(i) } },
             h('div', { class: 'db-insumo-linea' },
               h('strong', {}, m.nombre),
-              h('span', { class: 'db-insumo-estado' }, m.estado === 'CRITICO' ? 'Crítico' : 'Bajo')),
+              h('span', { class: 'db-insumo-estado' }, m.estado === 'CRITICO' ? 'Muy poco' : 'Poco')),
             h('div', { class: 'db-barra db-barra-fina', role: 'img', 'aria-label': `${formatoNumero(m.stock)} de un mínimo de ${formatoNumero(m.minimo)} ${m.unidad}` },
               h('span', { class: 'db-barra-relleno', style: { '--ancho': `${nivel}%` } })),
-            h('span', { class: 'db-insumo-dato' }, `${formatoNumero(m.stock)} / ${formatoNumero(m.minimo)} ${m.unidad} mínimo`));
+            h('span', { class: 'db-insumo-dato' }, `Hay ${formatoNumero(m.stock)} ${m.unidad} · avisar bajo ${formatoNumero(m.minimo)}`));
         })));
   }
 
@@ -312,22 +340,42 @@ export function crearVista(ctx) {
   // ---------------------------------------------------------------- composición
   function pintar(extra) {
     const d = datos;
-    const gVentas = tarjetaGrafico('Ventas y margen', 'últimos 7 días', 'Barras con las ventas por día y área con el margen bruto de los últimos 7 días', 8, 300);
-    const gCategoria = tarjetaGrafico('Insumos por categoría', 'valor a costo', 'Dona con el valor del inventario de insumos por categoría', 12, 280);
-    const gCompras = tarjetaGrafico('Compras a proveedores', 'últimos 7 días', 'Curva con el valor de las compras de insumos por día', 13, 220);
+    const gVentas = tarjetaGrafico('Ventas y ganancia', 'últimos 7 días', 'Barras con las ventas por día y área con el margen bruto de los últimos 7 días', 8, 300);
+    const gCategoria = tarjetaGrafico('Ingredientes por tipo', 'lo que costaron', 'Dona con el valor del inventario de insumos por categoría', 12, 280);
+    const gCompras = tarjetaGrafico('Compras de ingredientes', 'últimos 7 días', 'Curva con el valor de las compras de insumos por día', 13, 220);
     const alertas = d.totalIngredientesCriticos + d.productosVencidos + d.productosPorVencer;
+    const contenidoDetalles = h('div', { class: 'db', id: 'db-detalles' });
+    const botonDetalles = h('button', { type: 'button', class: 'db-ver-mas', 'aria-controls': 'db-detalles', 'aria-expanded': 'false' }, 'Ver más detalles', h('span', { class: 'db-ver-mas-flecha', 'aria-hidden': 'true' }, '▾'));
+    const detalles = h('div', { class: 'db-detalles' }, botonDetalles, contenidoDetalles);
     reemplazarHijos(cuerpo,
       portada(d),
+      accionesRapidas(d),
       alertas > 0 ? h('a', { class: 'db-aviso db-entra', href: '#/alertas', style: { '--i': '1' } },
         h('span', { class: 'db-aviso-icono', 'aria-hidden': 'true' }, '⚡'),
         h('span', {}, h('strong', {}, `${alertas} cosa${alertas === 1 ? '' : 's'} para revisar hoy: `),
-          [d.productosVencidos ? `${d.productosVencidos} vencido(s)` : null, d.productosPorVencer ? `${d.productosPorVencer} por vencer` : null, d.totalIngredientesCriticos ? `${d.totalIngredientesCriticos} insumo(s) bajo mínimo` : null].filter(Boolean).join(' · ')),
+          [d.productosVencidos ? `${d.productosVencidos} vencido(s)` : null, d.productosPorVencer ? `${d.productosPorVencer} vence(n) pronto` : null, d.totalIngredientesCriticos ? `${d.totalIngredientesCriticos} ingrediente(s) por comprar` : null].filter(Boolean).join(' · ')),
         h('span', { class: 'db-aviso-flecha', 'aria-hidden': 'true' }, '→')) : null,
+      guiaBienvenida(),
       anillos(d, extra),
+      detalles);
+    // Los detalles (cifras, gráficos, podio, actividad) quedan plegados: la pantalla de inicio se entiende de un vistazo.
+    function abrirDetalles(abrir) {
+      detalles.hidden = false;
+      contenidoDetalles.hidden = !abrir;
+      botonDetalles.setAttribute('aria-expanded', String(abrir));
+      botonDetalles.firstChild.textContent = abrir ? 'Ocultar detalles' : 'Ver más detalles: gráficos, más vendidos y actividad';
+      try { localStorage.setItem('pastel-stock.inicio-detalles', abrir ? '1' : '0'); } catch { /* sin almacenamiento */ }
+      if (abrir && !graficos.length) requestAnimationFrame(() => dibujarGraficos(gVentas, gCategoria, gCompras));
+    }
+    botonDetalles.onclick = () => abrirDetalles(contenidoDetalles.hidden);
+    reemplazarHijos(contenidoDetalles,
       tarjetas(d),
       h('div', { class: 'db-rejilla db-rejilla-principal' }, gVentas.el, podio(d)),
       h('div', { class: 'db-rejilla db-rejilla-tres' }, pulso(extra.eventos), insumos(d), h('div', { class: 'db-columna' }, gCategoria.el, gCompras.el)));
-    requestAnimationFrame(() => dibujarGraficos(gVentas, gCategoria, gCompras));
+    destruirGraficos();
+    let abiertos = false;
+    try { abiertos = localStorage.getItem('pastel-stock.inicio-detalles') === '1'; } catch { abiertos = false; }
+    abrirDetalles(abiertos);
   }
 
   function esqueleto() {

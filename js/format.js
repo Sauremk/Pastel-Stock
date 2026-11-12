@@ -45,9 +45,9 @@ export function hoyISO(ahora = new Date()) {
 
 // ---- Estado de stock (misma regla que el servidor y que el MVP: líneas 1589-1593) --------------------
 export const ESTADOS_STOCK = {
-  CRITICO: { clave: 'CRITICO', clase: 'critico', texto: 'Crítico' },
-  BAJO: { clave: 'BAJO', clase: 'bajo', texto: 'Bajo' },
-  OPTIMO: { clave: 'OPTIMO', clase: 'optimo', texto: 'Óptimo' },
+  CRITICO: { clave: 'CRITICO', clase: 'critico', texto: 'Muy poco' },
+  BAJO: { clave: 'BAJO', clase: 'bajo', texto: 'Poco' },
+  OPTIMO: { clave: 'OPTIMO', clase: 'optimo', texto: 'Suficiente' },
 };
 
 /** Calcula el estado cuando solo se conocen stock y mínimo. */
@@ -68,8 +68,8 @@ export function infoEstado(clave) {
 export const DIAS_POR_VENCER = 3;
 const ETIQUETAS_CADUCIDAD = {
   vencido: 'Vencido',
-  'por-vencer': 'Por vencer',
-  vigente: 'Vigente',
+  'por-vencer': 'Vence pronto',
+  vigente: 'Fresco',
 };
 
 /** Días (enteros) desde `hoy` hasta la fecha AAAA-MM-DD; negativo si ya pasó. */

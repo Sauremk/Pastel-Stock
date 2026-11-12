@@ -6,6 +6,7 @@ import {
 import { formatoNumero, formatoFechaHora, infoEstado, mensajeDeError, hoyISO } from '../format.js';
 import { validarEntrada } from '../validacion.js';
 import { TEXTO_MOTIVO } from '../catalogos.js';
+import { pestanasInventario } from '../ui.js';
 
 const CLASE_TIPO = { ENTRADA: 'entrada', SALIDA: 'salida', AJUSTE: 'ajuste', AJUSTE_NEGATIVO: 'ajuste-neg' };
 const TEXTO_TIPO = { ENTRADA: 'Entrada', SALIDA: 'Salida', AJUSTE: 'Ajuste +', AJUSTE_NEGATIVO: 'Ajuste −' };
@@ -26,12 +27,13 @@ export function crearVista(ctx) {
   const filtroHasta = h('input', { type: 'date', max: hoyISO() });
 
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-movimientos' },
-    encabezadoVista('Movimientos de inventario', 'Entradas de proveedor y kardex de materias primas. Los ajustes por conteo se hacen desde Materias primas (⚖️).'),
-    puedeRegistrar ? h('div', { class: 'panel' }, h('h2', {}, 'Registrar entrada'), zonaFormulario) : null,
+    encabezadoVista('Inventario', 'Anota aquí los ingredientes que te llegan. Abajo ves todo lo que ha entrado y salido.'),
+    pestanasInventario('movimientos'),
+    puedeRegistrar ? h('div', { class: 'panel panel-destacado' }, h('h2', {}, '📦 ¿Llegaron ingredientes? Anótalos'), zonaFormulario) : null,
     h('div', { class: 'panel' },
-      h('h2', {}, 'Kardex'),
+      h('h2', {}, 'Historial de ingredientes'),
       h('div', { class: 'barra-filtros' },
-        h('label', {}, 'Materia prima', filtroCodigo),
+        h('label', {}, 'Ingrediente', filtroCodigo),
         h('label', {}, 'Tipo', filtroTipo),
         h('label', {}, 'Desde', filtroDesde),
         h('label', {}, 'Hasta', filtroHasta)),
@@ -44,7 +46,7 @@ export function crearVista(ctx) {
   filtroHasta.addEventListener('change', () => { estado.hasta = filtroHasta.value; estado.pagina = 1; cargarKardex(); });
 
   function llenarSelectores() {
-    const opciones = materias.map((m) => ({ valor: m.codigo, texto: `${m.nombre} (${m.codigo})` }));
+    const opciones = materias.map((m) => ({ valor: m.codigo, texto: m.nombre }));
     const valorFiltro = filtroCodigo.value;
     filtroCodigo.replaceChildren(h('option', { value: '' }, 'Todas'), ...opciones.map((o) => h('option', { value: o.valor }, o.texto)));
     filtroCodigo.value = valorFiltro;
@@ -54,18 +56,18 @@ export function crearVista(ctx) {
   function pintarFormulario(opciones) {
     const aviso = crearAvisoFormulario();
     const campos = {
-      codigo: campo({ id: idCampo('ent-mp'), etiqueta: 'Materia prima', requerido: true, control: selectControl(opciones, { placeholder: 'Seleccionar…' }) }),
-      cantidad: campo({ id: idCampo('ent-cant'), etiqueta: 'Cantidad', requerido: true, ayuda: 'En la unidad de la materia prima; debe ser mayor que cero.',
+      codigo: campo({ id: idCampo('ent-mp'), etiqueta: '¿Qué llegó?', requerido: true, control: selectControl(opciones, { placeholder: 'Elige el ingrediente…' }) }),
+      cantidad: campo({ id: idCampo('ent-cant'), etiqueta: '¿Cuánto llegó?', requerido: true, ayuda: 'En la unidad del ingrediente (te la mostramos al elegirlo).',
         control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: 'Ej. 10' }) }),
-      proveedor: campo({ id: idCampo('ent-prov'), etiqueta: 'Proveedor', requerido: true, control: h('input', { type: 'text', maxlength: '80', placeholder: 'Ej. Molinos del Valle' }) }),
+      proveedor: campo({ id: idCampo('ent-prov'), etiqueta: '¿Quién lo trajo?', requerido: true, control: h('input', { type: 'text', maxlength: '80', placeholder: 'Ej. Molinos del Valle' }) }),
       nota: campo({ id: idCampo('ent-nota'), etiqueta: 'Nota (opcional)', control: h('input', { type: 'text', maxlength: '200' }) }),
     };
     const unidad = h('span', { class: 'solo-lectura' });
     campos.codigo.control.addEventListener('change', () => {
       const m = materias.find((x) => x.codigo === campos.codigo.control.value);
-      unidad.textContent = m ? `Unidad: ${m.unidad}` : '';
+      unidad.textContent = m ? `Se mide en ${m.unidad} · hoy hay ${formatoNumero(m.stock)} ${m.unidad}` : '';
     });
-    const registrar = h('button', { type: 'submit', class: 'btn' }, '✓ Registrar entrada');
+    const registrar = h('button', { type: 'submit', class: 'btn' }, '✓ Guardar lo que llegó');
     const form = h('form', { novalidate: true },
       aviso.el,
       h('div', { class: 'form-row' }, campos.codigo.grupo, campos.proveedor.grupo),
@@ -81,7 +83,7 @@ export function crearVista(ctx) {
       try {
         const r = await conBotonOcupado(registrar, () => api.post('/movimientos/entradas', datos), 'Registrando…');
         const e = infoEstado(r.estado);
-        toast(`Entrada registrada: ${r.codigo} ahora tiene ${formatoNumero(r.stock)} (${e.texto})`);
+        toast(`Listo: ahora hay ${formatoNumero(r.stock)} ${materias.find((x) => x.codigo === r.codigo)?.unidad ?? ''} de ${materias.find((x) => x.codigo === r.codigo)?.nombre ?? r.codigo} (${e.texto.toLowerCase()})`);
         form.reset();
         unidad.textContent = '';
         const m = materias.find((x) => x.codigo === r.codigo);
@@ -134,5 +136,7 @@ export function crearVista(ctx) {
     await cargarKardex();
   }
 
-  return { el, titulo: 'Movimientos', cargar, destruir() { marcaCarga++; } };
+  return {
+    el, titulo: 'Entradas', cargar,
+    accion(a) { if (a === 'entrada') { const c = zonaFormulario.querySelector('select'); c?.scrollIntoView?.({ block: 'center' }); c?.focus(); } }, destruir() { marcaCarga++; } };
 }

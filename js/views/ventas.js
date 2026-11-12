@@ -13,6 +13,7 @@ const desdeHace = (dias) => { const d = new Date(); d.setDate(d.getDate() - dias
 export function crearVista(ctx) {
   const { api, auth } = ctx;
   const puedeVender = auth.puede('ventas');
+  const verGanancia = auth.puede('rentabilidad');
   const estado = { pagina: 1, limite: 15, desde: desdeHace(29), hasta: hoyISO() };
   let marcaCarga = 0;
 
@@ -20,10 +21,10 @@ export function crearVista(ctx) {
   const zonaLista = h('div', {});
   const filtroDesde = h('input', { type: 'date', value: estado.desde, max: hoyISO(), id: idCampo('v-desde') });
   const filtroHasta = h('input', { type: 'date', value: estado.hasta, max: hoyISO(), id: idCampo('v-hasta') });
-  const botonVender = puedeVender ? h('button', { type: 'button', class: 'btn btn-acento', onClick: () => abrirVenta() }, '＋ Registrar venta') : null;
+  const botonVender = puedeVender ? h('button', { type: 'button', class: 'btn btn-acento', onClick: () => abrirVenta() }, '＋ Registrar una venta') : null;
 
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-ventas' },
-    encabezadoVista('Ventas', 'Precio y costo quedan congelados en cada venta: el margen histórico no cambia.', botonVender),
+    encabezadoVista('Ventas', 'Toca «Registrar una venta» cada vez que vendas algo.', botonVender),
     zonaResumen,
     h('div', { class: 'panel' },
       h('div', { class: 'panel-header' },
@@ -57,8 +58,8 @@ export function crearVista(ctx) {
     const tarjeta = (titulo, valor, nota, clase) => h('div', { class: ['kpi', clase] }, h('h3', {}, titulo), h('div', { class: 'valor' }, valor), h('div', { class: 'nota' }, nota));
     reemplazarHijos(zonaResumen, h('div', { class: 'kpis' },
       tarjeta('Vendido en el período', formatoCOP(resumen.total), `${formatoNumero(paginacion.total)} venta(s)`, 'destacado'),
-      tarjeta('Costo de lo vendido', formatoCOP(resumen.costo), 'Costo congelado al vender'),
-      tarjeta('Margen bruto', formatoCOP(resumen.margen), pct, 'tendencia-up')));
+      auth.puede('rentabilidad') ? tarjeta('Lo que costó hacerlo', formatoCOP(resumen.costo), 'Ingredientes de lo vendido') : null,
+      auth.puede('rentabilidad') ? tarjeta('Ganancia', formatoCOP(resumen.margen), pct, 'tendencia-up') : null));
   }
 
   function pintarLista({ datos, paginacion }) {
@@ -69,13 +70,13 @@ export function crearVista(ctx) {
     reemplazarHijos(zonaLista,
       tabla({
         descripcion: 'Historial de ventas',
-        columnas: [{ titulo: 'Venta' }, { titulo: 'Fecha' }, { titulo: 'Productos' }, { titulo: 'Total', num: true }, { titulo: 'Margen', num: true }, { titulo: 'Registró' }],
+        columnas: [{ titulo: 'Venta' }, { titulo: 'Fecha' }, { titulo: 'Productos' }, { titulo: 'Total', num: true }, ...(verGanancia ? [{ titulo: 'Ganancia', num: true }] : []), { titulo: 'Registró' }],
         filas: datos.map((v) => ({ celdas: [
           `#${v.id}`,
           formatoFechaHora(v.creadoEn),
           h('span', {}, v.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', '), v.nota ? h('span', { class: 'sub' }, v.nota) : null),
           formatoCOP(v.total),
-          h('span', {}, formatoCOP(v.margen), h('span', { class: 'sub' }, v.total > 0 ? `${formatoNumero(r2((v.margen / v.total) * 100))} %` : '')),
+          ...(verGanancia ? [h('span', {}, formatoCOP(v.margen), h('span', { class: 'sub' }, v.total > 0 ? `${formatoNumero(r2((v.margen / v.total) * 100))} %` : ''))] : []),
           v.registradoPor ?? '—',
         ] })),
       }),
@@ -100,7 +101,7 @@ export function crearVista(ctx) {
     function nuevaLinea(skuInicial = '') {
       const ids = { sku: idCampo('vl-sku'), cant: idCampo('vl-cant'), precio: idCampo('vl-precio') };
       const sel = h('select', { id: ids.sku },
-        h('option', { value: '' }, 'Seleccionar producto…'),
+        h('option', { value: '' }, 'Elige qué vendiste…'),
         ...productos.map((p) => h('option', { value: p.sku }, `${p.nombre} · ${formatoNumero(p.stock)} disp.`)));
       sel.value = skuInicial;
       const cant = h('input', { id: ids.cant, type: 'number', min: '1', step: '1', inputmode: 'numeric', value: '1' });
@@ -111,16 +112,17 @@ export function crearVista(ctx) {
         if (lineas.length === 1) return;
         lineas.splice(lineas.indexOf(linea), 1); linea.el.remove(); recalcular();
       } }, '×');
-      const ponerPrecio = () => { precio.placeholder = porSku.get(sel.value) ? String(porSku.get(sel.value).precio) : 'Precio de lista'; };
+      const ponerPrecio = () => { precio.placeholder = porSku.get(sel.value) ? String(porSku.get(sel.value).precio) : 'Se pone solo'; };
       sel.addEventListener('change', () => { ponerPrecio(); recalcular(); });
       cant.addEventListener('input', recalcular);
       precio.addEventListener('input', recalcular);
       ponerPrecio();
       linea.el = h('div', { class: 'linea-venta' },
-        h('div', { class: 'form-group' }, h('label', { for: ids.sku }, 'Producto'), sel, errores.sku),
-        h('div', { class: 'form-group' }, h('label', { for: ids.cant }, 'Cantidad'), cant, errores.cantidad),
-        h('div', { class: 'form-group' }, h('label', { for: ids.precio }, 'Precio unit.'), precio, errores.precioUnitario),
+        h('div', { class: 'form-group' }, h('label', { for: ids.sku }, '¿Qué vendiste?'), sel, errores.sku),
+        h('div', { class: 'form-group' }, h('label', { for: ids.cant }, '¿Cuántos?'), cant, errores.cantidad),
+        h('div', { class: 'form-group' }, h('label', { for: ids.precio }, 'Precio c/u'), precio, errores.precioUnitario),
         quitar);
+      linea.quitar = quitar;
       lineas.push(linea);
       lista.appendChild(linea.el);
       return linea;
@@ -137,10 +139,11 @@ export function crearVista(ctx) {
         costo += c * (p.costoUnitario ?? 0);
       }
       const margen = total - costo;
+      // Solo el total para quien vende; la ganancia la ve quien administra (menos números en pantalla).
       reemplazarHijos(resumen,
-        h('div', {}, h('span', {}, 'Costo estimado'), h('span', {}, formatoCOP(costo))),
-        h('div', { class: 'margen' }, h('span', {}, 'Margen'), h('span', {}, `${formatoCOP(margen)}${total > 0 ? ` · ${formatoNumero(r2((margen / total) * 100))} %` : ''}`)),
-        h('div', { class: 'total' }, h('span', {}, 'Total'), h('span', {}, formatoCOP(total))));
+        auth.puede('rentabilidad') ? h('div', { class: 'margen' }, h('span', {}, 'Ganas'), h('span', {}, `${formatoCOP(margen)}${total > 0 ? ` · ${formatoNumero(r2((margen / total) * 100))} %` : ''}`)) : null,
+        h('div', { class: 'total' }, h('span', {}, 'Total a cobrar'), h('span', {}, formatoCOP(total))));
+      lineas.forEach((l) => { l.quitar.hidden = lineas.length === 1; });
     }
 
     nuevaLinea();
@@ -149,10 +152,10 @@ export function crearVista(ctx) {
     const form = h('form', { novalidate: true },
       aviso.el,
       lista,
-      h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onClick: () => { nuevaLinea().sel.focus(); } }, '＋ Agregar otro producto'),
+      h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onClick: () => { const l = nuevaLinea(); recalcular(); l.sel.focus(); } }, '＋ Agregar otro producto'),
       h('div', { class: 'form-group', style: { marginTop: '14px' } }, h('label', { for: nota.id }, 'Nota (opcional)'), nota),
       resumen,
-      h('p', { class: 'ayuda' }, 'Deja el precio vacío para usar el de lista. Los productos vencidos no aparecen: dalos de baja desde Alertas.'),
+      h('p', { class: 'ayuda' }, 'El precio se pone solo. Cámbialo solo si hiciste un descuento.'),
       h('div', { class: 'form-acciones' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => modal.cerrar() }, 'Cancelar'), vender));
     const modal = abrirModal({ titulo: 'Registrar venta', contenido: form, ancho: 720 });
     lineas[0].sel.focus();
@@ -181,5 +184,7 @@ export function crearVista(ctx) {
     });
   }
 
-  return { el, titulo: 'Ventas', cargar, destruir() { marcaCarga++; } };
+  return {
+    el, titulo: 'Ventas', cargar,
+    accion(a) { if (a === 'nueva' && puedeVender) abrirVenta(); }, destruir() { marcaCarga++; } };
 }
