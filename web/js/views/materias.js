@@ -7,11 +7,13 @@ import { CATEGORIAS_MP, UNIDADES } from '../catalogos.js';
 import { formatoCOP, formatoNumero, infoEstado, mensajeDeError } from '../format.js';
 import { validarMateria } from '../validacion.js';
 import { botonesExportar } from './exportar.js';
+import { abrirAjuste } from './ajuste.js';
 
 export function crearVista(ctx) {
   const { api, auth } = ctx;
   const estado = { pagina: 1, limite: 20, q: '', categoria: '', estado: '' };
   const puedeEditar = auth.puede('catalogo');
+  const puedeAjustar = auth.puede('ajustes');
   let marcaCarga = 0;
 
   const zona = h('div', { class: 'table-zona' });
@@ -59,10 +61,11 @@ export function crearVista(ctx) {
       { titulo: 'Mínimo', num: true }, { titulo: 'Costo (COP)', num: true }, { titulo: 'Estado' }, { titulo: 'Acciones' }];
     const filas = datos.map((m) => {
       const e = infoEstado(m.estado);
-      const acciones = puedeEditar
+      const acciones = puedeEditar || puedeAjustar
         ? h('div', { class: 'action-buttons' },
-          h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${m.nombre}`, title: 'Editar', onClick: () => abrirFormulario(m) }, '✏️'),
-          h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar ${m.nombre}`, title: 'Eliminar', onClick: () => eliminar(m) }, '🗑️'))
+          puedeAjustar ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Ajustar stock de ${m.nombre} por conteo`, title: 'Ajustar por conteo', onClick: () => abrirAjuste({ api, tipo: 'materia', item: m, alTerminar: () => { ctx.refrescarAlertas?.(); cargar(); } }) }, '⚖️') : null,
+          puedeEditar ? h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${m.nombre}`, title: 'Editar', onClick: () => abrirFormulario(m) }, '✏️') : null,
+          puedeEditar ? h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar ${m.nombre}`, title: 'Eliminar', onClick: () => eliminar(m) }, '🗑️') : null)
         : h('span', { class: 'solo-lectura' }, 'Solo lectura');
       return { celdas: [m.codigo, m.nombre, m.categoria, formatoNumero(m.stock), m.unidad, formatoNumero(m.minimo), formatoCOP(m.costo), insignia(e.texto, e.clase), acciones] };
     });

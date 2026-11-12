@@ -15,6 +15,10 @@ export const DEFINICIONES = {
     titulo: 'Productos terminados',
     columnas: [['SKU', 'sku'], ['Nombre', 'nombre'], ['Categoría', 'categoria'], ['Stock', 'stock'], ['Precio (COP)', 'precio', 'cop'], ['Caducidad', 'caducidad']],
   },
+  ventas: {
+    titulo: 'Ventas (últimos 30 días)',
+    columnas: [['Fecha', 'fecha'], ['Venta', 'venta'], ['Producto', 'producto'], ['Cant.', 'cantidad'], ['Precio', 'precio', 'cop'], ['Subtotal', 'subtotal', 'cop'], ['Costo', 'costo', 'cop'], ['Margen', 'margen', 'cop']],
+  },
   recetas: {
     titulo: 'Recetas (fichas técnicas)',
     columnas: [['Producto', 'producto'], ['Ingrediente', 'ingrediente'], ['Cantidad', 'cantidad'], ['Unidad', 'unidad']],

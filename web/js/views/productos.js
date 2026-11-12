@@ -7,10 +7,12 @@ import { CATEGORIAS_PT } from '../catalogos.js';
 import { formatoCOP, formatoFecha, estadoCaducidad, mensajeDeError } from '../format.js';
 import { validarProducto } from '../validacion.js';
 import { botonesExportar } from './exportar.js';
+import { abrirAjuste, abrirKardexProducto } from './ajuste.js';
 
 export function crearVista(ctx) {
   const { api, auth } = ctx;
   const puedeEditar = auth.puede('catalogo');
+  const puedeAjustar = auth.puede('ajustes');
   let todos = [];
   let marcaCarga = 0;
   const filtros = { q: '', categoria: '' };
@@ -51,17 +53,20 @@ export function crearVista(ctx) {
       reemplazarHijos(zona, vacio(todos.length ? 'Ningún producto coincide con la búsqueda.' : 'Aún no hay productos registrados.', '🎂'));
       return;
     }
-    const columnas = [{ titulo: 'SKU' }, { titulo: 'Nombre' }, { titulo: 'Categoría' }, { titulo: 'Stock', num: true }, { titulo: 'Precio (COP)', num: true }, { titulo: 'Caducidad' }, { titulo: 'Acciones' }];
+    const columnas = [{ titulo: 'SKU' }, { titulo: 'Nombre' }, { titulo: 'Categoría' }, { titulo: 'Stock', num: true }, { titulo: 'Precio', num: true },
+      { titulo: 'Costo', num: true }, { titulo: 'Caducidad' }, { titulo: 'Acciones' }];
     const filas = lista.map((p) => {
       const cad = estadoCaducidad(p.caducidad);
-      const acciones = puedeEditar
-        ? h('div', { class: 'action-buttons' },
-          h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${p.nombre}`, title: 'Editar', onClick: () => abrirFormulario(p) }, '✏️'),
-          h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar ${p.nombre}`, title: 'Eliminar', onClick: () => eliminar(p) }, '🗑️'))
-        : h('span', { class: 'solo-lectura' }, 'Solo lectura');
+      const margen = p.precio > 0 && p.costoUnitario > 0 ? Math.round(((p.precio - p.costoUnitario) / p.precio) * 100) : null;
+      const acciones = h('div', { class: 'action-buttons' },
+        h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Kardex de ${p.nombre}`, title: 'Kardex', onClick: () => abrirKardexProducto({ api, producto: p }) }, '📒'),
+        puedeAjustar ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Ajustar stock de ${p.nombre}`, title: 'Ajustar por conteo', onClick: () => abrirAjuste({ api, tipo: 'producto', item: p, alTerminar: () => { ctx.refrescarAlertas?.(); cargar(); } }) }, '⚖️') : null,
+        puedeEditar ? h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${p.nombre}`, title: 'Editar', onClick: () => abrirFormulario(p) }, '✏️') : null,
+        puedeEditar ? h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar ${p.nombre}`, title: 'Eliminar', onClick: () => eliminar(p) }, '🗑️') : null);
       return {
         clase: cad.clave === 'vencido' ? 'fila-vencida' : cad.clave === 'por-vencer' ? 'fila-por-vencer' : null,
         celdas: [p.sku, p.nombre, p.categoria, String(p.stock), formatoCOP(p.precio),
+          h('span', {}, formatoCOP(p.costoUnitario ?? 0), margen === null ? null : h('span', { class: 'sub' }, `margen ${margen} %`)),
           h('span', {}, formatoFecha(p.caducidad), ' ', insignia(cad.texto, cad.clase)), acciones],
       };
     });
@@ -69,7 +74,7 @@ export function crearVista(ctx) {
   }
 
   async function eliminar(p) {
-    const ok = await confirmar({ titulo: 'Eliminar producto', mensaje: `¿Eliminar «${p.nombre}» (${p.sku})? Esta acción no se puede deshacer.` });
+    const ok = await confirmar({ titulo: 'Eliminar producto', mensaje: `¿Eliminar «${p.nombre}» (${p.sku})? Si ya tiene ventas o producciones no se podrá: déjalo en stock 0.` });
     if (!ok) return;
     try {
       await api.del(`/productos/${encodeURIComponent(p.sku)}`);
@@ -89,6 +94,8 @@ export function crearVista(ctx) {
     nuevo('stock', { etiqueta: 'Stock (unidades)', requerido: true, control: h('input', { type: 'number', min: '0', step: '1', inputmode: 'numeric', value: existente?.stock ?? '', placeholder: '0' }) });
     nuevo('precio', { etiqueta: 'Precio de venta (COP)', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.precio ?? '', placeholder: 'Ej. 35000' }) });
     nuevo('caducidad', { etiqueta: 'Fecha de caducidad', requerido: true, control: h('input', { type: 'date', value: existente?.caducidad ?? '' }) });
+    nuevo('costoUnitario', { etiqueta: 'Costo unitario (COP)', ayuda: 'Opcional. Si tiene receta se recalcula solo al producir.',
+      control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.costoUnitario || '', placeholder: 'Ej. 9350' }) });
 
     const guardar = h('button', { type: 'submit', class: 'btn' }, 'Guardar');
     const form = h('form', { novalidate: true },
@@ -97,6 +104,7 @@ export function crearVista(ctx) {
       campos.nombre.grupo,
       h('div', { class: 'form-row' }, campos.categoria.grupo, campos.caducidad.grupo),
       h('div', { class: 'form-row' }, campos.stock.grupo, campos.precio.grupo),
+      campos.costoUnitario.grupo,
       h('div', { class: 'form-acciones' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => modal.cerrar() }, 'Cancelar'), guardar));
     const modal = abrirModal({ titulo: editando ? `Editar ${existente.sku}` : 'Nuevo producto', contenido: form });
 

@@ -2,6 +2,30 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.1.0] — Aplicativo mejorado (2026-11-12)
+
+### Añadido
+- **Ventas** (contexto nuevo, ADR-17): `POST /ventas` con varias líneas, precio pactado opcional, `Idempotency-Key`, bloqueo de stock y rechazo de productos vencidos; `GET /ventas` con filtro por fecha y resumen del período. Pantalla «Ventas» con carrito, total y margen estimado en vivo.
+- **Costeo:** `GET /recetas/{id}/costeo` (costo estándar con conversión de unidades); producir costea el lote, recalcula el costo promedio ponderado y puede actualizar la caducidad. `GET /reportes/rentabilidad` y pantalla «Costos y márgenes» (admin y contador). Exportación de ventas a PDF y Excel.
+- **Tablero:** ventas, margen bruto, ROI sobre costo y pérdidas de 30 días; gráficos de ventas y margen de 7 días y más vendidos.
+- **Alertas:** `GET /reportes/alertas` (vencidos con stock, por vencer, valor en riesgo, insumos por reponer); pantalla «Alertas» con baja en un clic e insignia en el menú.
+- **Ajustes por conteo físico** con motivo, para materias primas (`POST /movimientos/ajustes`) y productos (`POST /productos/{sku}/ajustes`); kardex de producto terminado (`GET /productos/{sku}/movimientos`, DT-22). Filtro por tipo en `GET /movimientos`.
+- Métricas `pastel_db_pool_*` y alertas `DbPoolSaturado` / `DbPoolConEspera` (DT-15).
+- Pruebas E2E con Playwright (`npm run test:e2e`, job `e2e` en CI): venta, validación de stock, baja de vencido, conteo en celular y permisos.
+
+### Cambiado
+- **Rediseño visual** completo: nueva paleta, tipografía, tarjetas KPI, menú agrupado; en celular, barra superior con menú deslizable y tablas convertidas en tarjetas. Sin violaciones WCAG 2 A/AA (axe-core) en las 8 vistas, ambos temas y ambos tamaños.
+- Un producto con ventas, producciones o bajas ya no se puede eliminar (409); se deja en stock 0.
+- Editar el stock de un producto deja un ajuste `CORRECCION` en su kardex.
+
+### Corregido
+- Con la base caída, las rutas de negocio respondían 500; ahora 503 con `Retry-After` (DT-20).
+- En celular (390 px) el menú lateral desaparecía y no había forma de navegar.
+- `npm run lint` fallaba en CI por los globales del script `scripts/verificar-reintento-ui.cjs` (PR #5).
+
+### Migración
+- `004_ventas_costeo_ajustes.sql` (aditiva): tablas `ventas`, `venta_items`, `movimientos_producto`; columnas `productos.costo_unitario` y `movimientos.motivo`; tipo `AJUSTE_NEGATIVO`. Costea los productos con receta y registra el saldo inicial de cada producto en su kardex.
+
 ## [Sin publicar] — Validación y piloto II–06
 
 ### Corregido

@@ -10,14 +10,22 @@ import { crearVista as vistaMaterias } from './views/materias.js';
 import { crearVista as vistaRecetas } from './views/recetas.js';
 import { crearVista as vistaProductos } from './views/productos.js';
 import { crearVista as vistaMovimientos } from './views/movimientos.js';
+import { crearVista as vistaVentas } from './views/ventas.js';
+import { crearVista as vistaAlertas } from './views/alertas.js';
+import { crearVista as vistaRentabilidad } from './views/rentabilidad.js';
 
 const VISTAS = {
   dashboard: vistaDashboard,
+  ventas: vistaVentas,
+  alertas: vistaAlertas,
   materias: vistaMaterias,
   recetas: vistaRecetas,
   productos: vistaProductos,
   movimientos: vistaMovimientos,
+  rentabilidad: vistaRentabilidad,
 };
+/** Vistas que solo ven ciertos roles (cosmético: el servidor responde 403 de todos modos). */
+const PERMISO_VISTA = { rentabilidad: 'rentabilidad' };
 const VISTA_INICIAL = 'dashboard';
 
 const $ = (id) => document.getElementById(id);
@@ -34,7 +42,7 @@ function aplicarTema(tema) {
 // ---------------------------------------------------------------- Estado de aplicación
 const auth = crearAuth();
 const api = crearApi({ auth, alSesionExpirada: () => mostrarLogin('Tu sesión venció. Inicia sesión de nuevo.') });
-const ctx = { api, auth };
+const ctx = { api, auth, refrescarAlertas: () => refrescarAlertas() };
 let vistaActual = null;
 let nombreVistaActual = null;
 let marcaNavegacion = 0;
@@ -61,13 +69,40 @@ function mostrarApp() {
   $('user-name').textContent = u.nombre;
   $('user-role').textContent = ETIQUETAS_ROL[u.rol] ?? u.rol;
   $('user-avatar').textContent = (u.nombre || '?').trim().charAt(0).toUpperCase();
+  document.querySelectorAll('[data-permiso]').forEach((n) => { n.hidden = !auth.puede(n.dataset.permiso); });
   navegar();
+  refrescarAlertas();
+}
+
+// ---------------------------------------------------------------- Insignia de alertas (vencidos, por vencer, insumos bajos)
+let marcaAlertas = 0;
+async function refrescarAlertas() {
+  if (!auth.estaAutenticado()) return;
+  const marca = ++marcaAlertas;
+  try {
+    const { total } = await api.get('/reportes/alertas');
+    if (marca !== marcaAlertas) return;
+    document.querySelectorAll('[data-insignia-alertas]').forEach((n) => {
+      n.textContent = total > 99 ? '99+' : String(total);
+      n.hidden = total === 0;
+    });
+    $('btn-alertas-top').setAttribute('aria-label', total ? `Ver alertas (${total})` : 'Ver alertas');
+  } catch { /* la insignia es informativa: si falla, la vista de alertas mostrará el error */ }
+}
+
+// ---------------------------------------------------------------- Menú lateral en móvil
+function abrirMenu(abrir) {
+  document.body.classList.toggle('menu-abierto', abrir);
+  $('velo-menu').hidden = !abrir;
+  $('btn-menu').setAttribute('aria-expanded', String(abrir));
+  if (abrir) document.querySelector('.sidebar .nav-item[aria-current="page"], .sidebar .nav-item')?.focus();
 }
 
 // ---------------------------------------------------------------- Navegación (hash: #/materias)
 function vistaDeHash() {
   const nombre = location.hash.replace(/^#\/?/, '');
-  return Object.hasOwn(VISTAS, nombre) ? nombre : VISTA_INICIAL;
+  if (!Object.hasOwn(VISTAS, nombre)) return VISTA_INICIAL;
+  return PERMISO_VISTA[nombre] && !auth.puede(PERMISO_VISTA[nombre]) ? VISTA_INICIAL : nombre;
 }
 
 async function navegar() {
@@ -94,10 +129,16 @@ async function navegar() {
 // ---------------------------------------------------------------- Eventos de la interfaz
 function configurarEventos() {
   document.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => {
+    abrirMenu(false);
     const destino = `#/${b.dataset.vista}`;
     if (location.hash === destino) { nombreVistaActual = null; navegar(); } else location.hash = destino;
   }));
   window.addEventListener('hashchange', navegar);
+  $('btn-menu').addEventListener('click', () => abrirMenu(!document.body.classList.contains('menu-abierto')));
+  $('velo-menu').addEventListener('click', () => abrirMenu(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('menu-abierto')) { abrirMenu(false); $('btn-menu').focus(); } });
+  $('btn-alertas-top').addEventListener('click', () => { location.hash = '#/alertas'; });
+  window.matchMedia('(min-width: 961px)').addEventListener?.('change', (m) => { if (m.matches) abrirMenu(false); });
 
   $('theme-switch').addEventListener('change', () => {
     const tema = $('theme-switch').checked ? 'dark' : 'light';

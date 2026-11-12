@@ -1,6 +1,7 @@
 import { conflicto, noEncontrado, validacion } from '../../shared/errors.js';
 import { contarEntrada, contarStockCritico } from '../../shared/metricas.js';
 import { abreviarNombre } from '../adapters/pg/movimientosRepo.js';
+import { tipoDeAjuste } from '../domain/ajustes.js';
 
 /** Casos de uso del contexto Inventario. Dependen del puerto `uow`, no de Express ni de pg. */
 export function crearCasosInventario({ uow }) {
@@ -21,7 +22,7 @@ export function crearCasosInventario({ uow }) {
         if (await materias.obtener(datos.codigo)) throw conflicto('Ya existe una materia prima con ese código', `Código ${datos.codigo}.`);
         const creada = await materias.crear(datos);
         if (datos.stock > 0) {
-          await movimientos.insertar({ codigo: datos.codigo, tipo: 'AJUSTE', cantidad: datos.stock, costoUnitario: datos.costo, usuarioId, nota: 'Stock inicial' });
+          await movimientos.insertar({ codigo: datos.codigo, tipo: 'AJUSTE', cantidad: datos.stock, costoUnitario: datos.costo, usuarioId, nota: 'Stock inicial', motivo: 'STOCK_INICIAL' });
         }
         return creada;
       });
@@ -74,12 +75,30 @@ export function crearCasosInventario({ uow }) {
       }
     },
 
+    /**
+     * Conteo físico de una materia prima: el stock pasa a ser lo contado y la diferencia queda en el kardex
+     * (AJUSTE si sobra, AJUSTE_NEGATIVO si falta) con su motivo. Bloquea la fila: no compite con producciones.
+     */
+    async registrarAjuste({ codigo, stockContado, motivo, nota }, usuarioId) {
+      return uow.transaccion(async ({ materias, movimientos }) => {
+        const m = await materias.obtener(codigo, { bloquear: true });
+        if (!m) throw noEncontrado('Materia prima', codigo);
+        const ajuste = tipoDeAjuste(m.stock, stockContado);
+        if (!ajuste) return { codigo, stockAnterior: m.stock, stockNuevo: m.stock, diferencia: 0, valorDiferencia: 0, estado: m.estado, movimientoId: null };
+        const despues = await materias.ajustarStock(codigo, ajuste.tipo === 'AJUSTE' ? ajuste.cantidad : -ajuste.cantidad);
+        const movimientoId = await movimientos.insertar({ codigo, ...ajuste, costoUnitario: m.costo, usuarioId, nota, motivo });
+        const diferencia = Math.round((despues.stock - m.stock) * 1e6) / 1e6;
+        return { codigo, stockAnterior: m.stock, stockNuevo: despues.stock, diferencia, valorDiferencia: Math.round(diferencia * m.costo * 100) / 100, estado: despues.estado, movimientoId };
+      });
+    },
+
     async listarMovimientos(filtros) {
       const { filas, total } = await uow.leer().movimientos.listar(filtros);
-      const datos = filas.map(({ registradoPorNombre, proveedor, nota, ...f }) => ({
+      const datos = filas.map(({ registradoPorNombre, proveedor, nota, motivo, ...f }) => ({
         ...f,
         ...(proveedor ? { proveedor } : {}),
         ...(nota ? { nota } : {}),
+        ...(motivo ? { motivo } : {}),
         ...(registradoPorNombre ? { registradoPor: abreviarNombre(registradoPorNombre) } : {}),
         creadoEn: f.creadoEn instanceof Date ? f.creadoEn.toISOString() : f.creadoEn,
       }));

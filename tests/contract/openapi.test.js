@@ -61,6 +61,16 @@ test('las respuestas REALES cumplen el esquema del contrato (contract testing)',
   cumple('/recetas/{id}/producir', 'post', 201, (await e.api.post(`/api/v1/recetas/${rec.body.id}/producir`).set(operador).send({ unidades: 2 })).body);
 
   cumple('/reportes/dashboard', 'get', 200, (await get('/api/v1/reportes/dashboard')).body);
+
+  // v1.1: ventas, costeo, alertas y ajustes
+  cumple('/ventas', 'post', 201, (await e.api.post('/api/v1/ventas').set(operador).send({ items: [{ sku: 'PT003', cantidad: 2 }], nota: 'contrato' })).body);
+  cumple('/ventas', 'get', 200, (await get('/api/v1/ventas')).body);
+  cumple('/recetas/{id}/costeo', 'get', 200, (await get('/api/v1/recetas/1/costeo')).body);
+  cumple('/reportes/alertas', 'get', 200, (await get('/api/v1/reportes/alertas?dias=10')).body);
+  cumple('/reportes/rentabilidad', 'get', 200, (await get('/api/v1/reportes/rentabilidad')).body);
+  cumple('/movimientos/ajustes', 'post', 201, (await e.api.post('/api/v1/movimientos/ajustes').set(operador).send({ codigo: 'MP030', stockContado: 400, motivo: 'CONTEO_FISICO' })).body);
+  cumple('/productos/{sku}/ajustes', 'post', 201, (await e.api.post('/api/v1/productos/PT009/ajustes').set(operador).send({ stockContado: 3, motivo: 'MERMA' })).body);
+  cumple('/productos/{sku}/movimientos', 'get', 200, (await get('/api/v1/productos/PT009/movimientos')).body);
 });
 
 test('los errores REALES cumplen el esquema Problema (application/problem+json)', async () => {
@@ -72,5 +82,7 @@ test('los errores REALES cumplen el esquema Problema (application/problem+json)'
   cumple('/materias-primas/{codigo}', 'get', 404, (await e.api.get('/api/v1/materias-primas/MP404').set(admin)).body, P);
   cumple('/materias-primas', 'post', 409, (await e.api.post('/api/v1/materias-primas').set(admin).send({ codigo: 'MP001', nombre: 'Repetida', categoria: 'Harinas', unidad: 'g', minimo: 1, costo: 1, stock: 1 })).body, P);
   cumple('/movimientos/entradas', 'post', 422, (await e.api.post('/api/v1/movimientos/entradas').set(admin).send({ codigo: 'MP001', cantidad: -5, proveedor: 'Proveedor' })).body, P);
+  cumple('/ventas', 'post', 409, (await e.api.post('/api/v1/ventas').set(admin).send({ items: [{ sku: 'PT004', cantidad: 999 }] })).body, P);
+  cumple('/movimientos/ajustes', 'post', 422, (await e.api.post('/api/v1/movimientos/ajustes').set(admin).send({ codigo: 'MP001', stockContado: -1, motivo: 'MERMA' })).body, P);
   cumple('/recetas/{id}/producir', 'post', 409, (await e.api.post('/api/v1/recetas/1/producir').set(admin).send({ unidades: 900 })).body, P);
 });

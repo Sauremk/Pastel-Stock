@@ -16,6 +16,9 @@ async function main() {
   const pool = crearPool(config.databaseUrl);
   pool.on('error', (e) => logger.error({ err: e.message }, 'error en conexión inactiva del pool'));
 
+  const { registrarMetricasPool } = await import('./shared/metricas.js');
+  registrarMetricasPool(pool); // DT-15
+
   if (config.ejecutarMigraciones) await migrar(pool, { log: (m) => logger.info(m) });
 
   const app = crearApp({ pool, config, logger });

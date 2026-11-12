@@ -5,6 +5,7 @@ import { autorizar } from '../../../identity/adapters/http/middleware.js';
 import { CATEGORIAS_MATERIA, ESTADOS_STOCK } from '../../domain/catalogos.js';
 
 const TODOS = ['admin', 'operador', 'contador'];
+const TIPOS_MOVIMIENTO = ['ENTRADA', 'SALIDA', 'AJUSTE', 'AJUSTE_NEGATIVO'];
 
 export function crearInventarioRouter({ casos, validar }) {
   const r = Router();
@@ -46,13 +47,18 @@ export function crearInventarioRouter({ casos, validar }) {
     res.status(201).json(await casos.registrarEntrada(req.body, req.usuario.id));
   }));
 
+  r.post('/movimientos/ajustes', autorizar('admin', 'operador'), validar.cuerpo('AjusteSolicitud'), asyncH(async (req, res) => {
+    res.status(201).json(await casos.registrarAjuste(req.body, req.usuario.id));
+  }));
+
   r.get('/movimientos', autorizar(...TODOS), asyncH(async (req, res) => {
     const pag = paginacion(req.query);
     const fecha = /^\d{4}-\d{2}-\d{2}$/;
     const { codigo, desde, hasta } = req.query;
     if (codigo !== undefined) parametro(codigo, RE_MP, 'codigo');
+    const tipo = enumerado(req.query.tipo, TIPOS_MOVIMIENTO, 'tipo');
     for (const [n, v] of [['desde', desde], ['hasta', hasta]]) if (v !== undefined && !fecha.test(String(v))) throw validacion(`Parámetro "${n}" inválido`, 'Use el formato AAAA-MM-DD.');
-    const { datos, total } = await casos.listarMovimientos({ codigo, desde, hasta, limite: pag.limite, offset: pag.offset });
+    const { datos, total } = await casos.listarMovimientos({ codigo, tipo, desde, hasta, limite: pag.limite, offset: pag.offset });
     res.json(pagina(datos, pag, total));
   }));
 

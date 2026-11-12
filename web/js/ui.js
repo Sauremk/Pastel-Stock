@@ -208,13 +208,15 @@ export async function conBotonOcupado(boton, promesaFn, textoOcupado = 'Guardand
 
 // ---------------------------------------------------------------- Tablas y paginación
 /** columnas: [{ titulo, num?: boolean }]; filas: [{ celdas: [Node|string], clase?: string }] */
-export function tabla({ columnas, filas, descripcion }) {
+export function tabla({ columnas, filas, descripcion, pie }) {
   return h('div', { class: 'table-container' },
     h('table', {},
       descripcion ? h('caption', { class: 'sr-only' }, descripcion) : null,
       h('thead', {}, h('tr', {}, ...columnas.map((c) => h('th', { scope: 'col', class: c.num ? 'num' : null }, c.titulo)))),
       h('tbody', {}, ...filas.map((f) => h('tr', { class: f.clase },
-        ...f.celdas.map((celda, i) => h('td', { class: columnas[i]?.num ? 'num' : null }, celda)))))));
+        // data-label: en móvil cada fila se pinta como tarjeta y la celda muestra el nombre de su columna.
+        ...f.celdas.map((celda, i) => h('td', { class: columnas[i]?.num ? 'num' : null, 'data-label': columnas[i]?.titulo ?? '' }, celda))))),
+      pie ? h('tfoot', {}, h('tr', {}, ...pie.map((c, i) => h('td', { class: columnas[i]?.num ? 'num' : null, 'data-label': columnas[i]?.titulo ?? '' }, c)))) : null));
 }
 
 export function insignia(texto, clase) {
@@ -249,5 +251,8 @@ export function descargarArchivo(blob, nombre) {
 }
 
 export function encabezadoVista(titulo, ...extra) {
-  return h('div', { class: 'header' }, h('h1', { tabindex: '-1' }, titulo), ...extra);
+  const subtitulo = typeof extra[0] === 'string' ? extra.shift() : null;
+  return h('div', { class: 'header' },
+    h('div', {}, h('h1', { tabindex: '-1' }, titulo), subtitulo ? h('p', { class: 'subtitulo' }, subtitulo) : null),
+    ...extra);
 }

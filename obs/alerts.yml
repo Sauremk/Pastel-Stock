@@ -22,3 +22,20 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "No llegan métricas de la API (API caída, Collector caído o sin tráfico instrumentado)"
+  - name: pastel-stock-pool
+    rules:
+      - alert: DbPoolSaturado
+        # DT-15 (acción 3 del postmortem simulado): el pool se acerca a su tope y las peticiones empezarán a esperar.
+        expr: max(pastel_db_pool_en_uso) / max(pastel_db_pool_max) >= 0.8
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "El pool de PostgreSQL está al 80 % o más durante 2 min"
+          runbook: "docs/runbooks/Runbook_base_de_datos.md"
+      - alert: DbPoolConEspera
+        expr: max(pastel_db_pool_esperando) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Hay peticiones esperando conexión a PostgreSQL desde hace 2 min (posible fuga de conexiones)"
+          runbook: "docs/runbooks/Runbook_base_de_datos.md"

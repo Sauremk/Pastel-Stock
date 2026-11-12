@@ -34,3 +34,18 @@ export function traducirErrorPg(err) {
     default: return err;
   }
 }
+
+/**
+ * DT-20: errores que indican que la BASE no está disponible (no un fallo del código). Se responden 503 con
+ * Retry-After para que el cliente reintente y el diagnóstico no se confunda con un 500.
+ * SQLSTATE 08xxx (conexión), 57P01/02/03 (servidor apagándose o arrancando), 53300 (demasiadas conexiones),
+ * errores de red de Node y los mensajes propios de node-postgres al agotar el tiempo o perder la conexión.
+ */
+const CODIGOS_RED = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'EPIPE']);
+export function esBaseNoDisponible(err) {
+  if (!err) return false;
+  const code = typeof err.code === 'string' ? err.code : '';
+  if (CODIGOS_RED.has(code) || /^08/.test(code) || ['57P01', '57P02', '57P03', '53300'].includes(code)) return true;
+  if (err.errors?.some?.(esBaseNoDisponible)) return true; // AggregateError (IPv4 + IPv6 rechazados)
+  return /timeout exceeded when trying to connect|Connection terminated|connection.*(closed|terminated)/i.test(err.message ?? '');
+}

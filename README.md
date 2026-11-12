@@ -1,6 +1,6 @@
 # Pastel Stock — Dulce Hogar · Sistema de Inventarios Pro
 
-Sistema de inventario y producción para una pastelería: materias primas, kardex de movimientos, productos con receta, producción que descuenta insumos, alertas de stock bajo y reportes (PDF/Excel). Evolución del MVP de un solo `index.html` a una aplicación con **API REST, base de datos PostgreSQL, autenticación en el servidor, pruebas, contenedores, CI/CD y observabilidad**.
+Sistema de inventario, producción y ventas para una pastelería: materias primas, kardex de movimientos, productos con receta, producción que descuenta insumos, **ventas con margen real, costeo por receta, alertas de caducidad y ajustes por conteo físico** (v1.1), alertas de stock bajo y reportes (PDF/Excel). Evolución del MVP de un solo `index.html` a una aplicación con **API REST, base de datos PostgreSQL, autenticación en el servidor, pruebas, contenedores, CI/CD y observabilidad**.
 
 - Repositorio: <https://github.com/Sauremk/Pastel-Stock>
 - Autor: Kevin Andres Rojas Marin (desarrollador full-stack, líder, QA/DevOps)
@@ -74,11 +74,12 @@ Los valores de ejemplo están en [`.env.example`](.env.example).
 | `npm test` | Todas las pruebas |
 | `npm run test:unit` / `test:integration` / `test:contract` | Por nivel |
 | `npm run test:cov` | Pruebas con cobertura |
+| `npm run test:e2e` | Flujos en navegador real con Playwright (antes: `npx playwright install chromium`) |
 | `npm run openapi:lint` | Valida el contrato OpenAPI |
 
 ## Estructura
 
-Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md). En resumen: `web/` (frontend), `src/{identity,inventory,catalog,reporting}` (monolito modular con núcleo hexagonal), `openapi/` (contrato), `tests/`, `k6/`, `obs/`, `docs/`, `.github/workflows/`.
+Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md). En resumen: `web/` (frontend), `src/{identity,inventory,catalog,sales,reporting}` (monolito modular con núcleo hexagonal), `openapi/` (contrato), `tests/`, `k6/`, `obs/`, `docs/`, `.github/workflows/`.
 
 ## API
 

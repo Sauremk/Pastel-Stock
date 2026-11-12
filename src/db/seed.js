@@ -20,11 +20,21 @@ const MATERIAS = [
   { codigo: 'MP004', nombre: 'Mantequilla', categoria: 'Lácteos', unidad: 'g', minimo: 3000, costo: 8.5, inicial: 1000, entradas: [[2, 1000, 'Lácteos del Norte']] },
   { codigo: 'MP005', nombre: 'Cacao en Polvo', categoria: 'Saborizantes', unidad: 'g', minimo: 2000, costo: 15, inicial: 15000, entradas: [] },
 ];
+// costo = COP por unidad (PT001 se recalcula con su receta; los demás son costos de referencia de la demo).
 const PRODUCTOS = [
-  { sku: 'PT001', nombre: 'Pastel de Chocolate', categoria: 'Pasteles', stock: 8, precio: 35000, dias: 2 },
-  { sku: 'PT002', nombre: 'Pan Dulce Surtido', categoria: 'Panes', stock: 45, precio: 1500, dias: 1 },
-  { sku: 'PT003', nombre: 'Galletas de Mantequilla', categoria: 'Galletas', stock: 60, precio: 800, dias: 9 },
-  { sku: 'PT004', nombre: 'Tarta de Fresa', categoria: 'Tartas', stock: 4, precio: 28000, dias: 1 },
+  { sku: 'PT001', nombre: 'Pastel de Chocolate', categoria: 'Pasteles', stock: 8, precio: 35000, dias: 2, costo: 9350 },
+  { sku: 'PT002', nombre: 'Pan Dulce Surtido', categoria: 'Panes', stock: 45, precio: 1500, dias: 1, costo: 600 },
+  { sku: 'PT003', nombre: 'Galletas de Mantequilla', categoria: 'Galletas', stock: 60, precio: 800, dias: 9, costo: 310 },
+  { sku: 'PT004', nombre: 'Tarta de Fresa', categoria: 'Tartas', stock: 4, precio: 28000, dias: 1, costo: 11500 },
+];
+// Ventas de la demo: [días atrás, [[sku, cantidad], ...]]. El stock de PRODUCTOS ya es el saldo DESPUÉS de estas ventas.
+const VENTAS = [
+  [6, [['PT002', 12], ['PT003', 20]]],
+  [5, [['PT001', 2], ['PT002', 8]]],
+  [4, [['PT004', 1], ['PT003', 15]]],
+  [3, [['PT001', 1], ['PT002', 10], ['PT003', 10]]],
+  [2, [['PT001', 3], ['PT004', 2]]],
+  [1, [['PT002', 15], ['PT003', 25], ['PT001', 1]]],
 ];
 
 async function sembrarUsuarios(pool, env, log) {
@@ -56,20 +66,36 @@ async function sembrarDemo(pool, ahora, log) {
     for (const m of MATERIAS) {
       const final = m.inicial + m.entradas.reduce((a, [, c]) => a + c, 0);
       await db.query('INSERT INTO materias_primas (codigo, nombre, categoria, stock, unidad, minimo, costo) VALUES ($1,$2,$3,$4,$5,$6,$7)', [m.codigo, m.nombre, m.categoria, final, m.unidad, m.minimo, m.costo]);
-      await db.query("INSERT INTO movimientos (materia_prima_codigo, tipo, cantidad, costo_unitario, usuario_id, nota, creado_en) VALUES ($1,'AJUSTE',$2,$3,$4,'Stock inicial',$5)", [m.codigo, m.inicial, m.costo, admin, hace(8)]);
+      await db.query("INSERT INTO movimientos (materia_prima_codigo, tipo, cantidad, costo_unitario, usuario_id, nota, creado_en, motivo) VALUES ($1,'AJUSTE',$2,$3,$4,'Stock inicial',$5,'STOCK_INICIAL')", [m.codigo, m.inicial, m.costo, admin, hace(8)]);
       for (const [dias, cantidad, proveedor] of m.entradas) {
         await db.query("INSERT INTO movimientos (materia_prima_codigo, tipo, cantidad, costo_unitario, proveedor, usuario_id, creado_en) VALUES ($1,'ENTRADA',$2,$3,$4,$5,$6)", [m.codigo, cantidad, m.costo, proveedor, operador, hace(dias)]);
       }
     }
+    const vendido = (sku) => VENTAS.reduce((a, [, items]) => a + items.filter(([s]) => s === sku).reduce((b, [, c]) => b + c, 0), 0);
     for (const p of PRODUCTOS) {
-      await db.query('INSERT INTO productos (sku, nombre, categoria, stock, precio, caducidad) VALUES ($1,$2,$3,$4,$5,$6)', [p.sku, p.nombre, p.categoria, p.stock, p.precio, sumarDias(hoy, p.dias)]);
+      await db.query('INSERT INTO productos (sku, nombre, categoria, stock, precio, caducidad, costo_unitario) VALUES ($1,$2,$3,$4,$5,$6,$7)', [p.sku, p.nombre, p.categoria, p.stock, p.precio, sumarDias(hoy, p.dias), p.costo]);
+      await db.query("INSERT INTO movimientos_producto (producto_sku, tipo, cantidad, costo_unitario, motivo, usuario_id, nota, creado_en) VALUES ($1,'AJUSTE',$2,$3,'STOCK_INICIAL',$4,'Stock inicial',$5)",
+        [p.sku, p.stock + vendido(p.sku), p.costo, admin, hace(8)]);
+    }
+    const porSku = new Map(PRODUCTOS.map((p) => [p.sku, p]));
+    for (const [dias, items] of VENTAS) {
+      const total = items.reduce((a, [s, c]) => a + c * porSku.get(s).precio, 0);
+      const costo = items.reduce((a, [s, c]) => a + c * porSku.get(s).costo, 0);
+      const cuando = `${sumarDias(hoy, -dias)}T15:30:00-05:00`;
+      const venta = (await db.query('INSERT INTO ventas (usuario_id, total, costo_total, creado_en) VALUES ($1,$2,$3,$4) RETURNING id', [operador, total, costo, cuando])).rows[0].id;
+      for (const [sku, cantidad] of items) {
+        const p = porSku.get(sku);
+        await db.query('INSERT INTO venta_items (venta_id, producto_sku, cantidad, precio_unitario, costo_unitario) VALUES ($1,$2,$3,$4,$5)', [venta, sku, cantidad, p.precio, p.costo]);
+        await db.query("INSERT INTO movimientos_producto (producto_sku, tipo, cantidad, costo_unitario, venta_id, usuario_id, nota, creado_en) VALUES ($1,'VENTA',$2,$3,$4,$5,$6,$7)",
+          [sku, cantidad, p.costo, venta, operador, `Venta #${venta}`, cuando]);
+      }
     }
     const rec = (await db.query("INSERT INTO recetas (producto_sku) VALUES ('PT001') RETURNING id")).rows[0].id;
     for (const [codigo, cantidad, unidad] of [['MP001', 500, 'g'], ['MP002', 300, 'g'], ['MP003', 4, 'unid'], ['MP004', 200, 'g'], ['MP005', 100, 'g']]) {
       await db.query('INSERT INTO receta_ingredientes (receta_id, materia_prima_codigo, cantidad, unidad) VALUES ($1,$2,$3,$4)', [rec, codigo, cantidad, unidad]);
     }
   });
-  log('datos demo: 5 materias primas, 4 productos, 1 receta y movimientos de los últimos días');
+  log(`datos demo: 5 materias primas, 4 productos, 1 receta, ${VENTAS.length} ventas y movimientos de los últimos días`);
 }
 
 export async function sembrar(pool, { env = process.env, ahora = new Date(), log = console.log } = {}) {

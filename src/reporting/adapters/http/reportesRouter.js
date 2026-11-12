@@ -8,6 +8,13 @@ export function crearReportesRouter({ casos, usuariosRepo }) {
   r.get('/reportes/dashboard', autorizar('admin', 'operador', 'contador'), asyncH(async (_req, res) => {
     res.set('Cache-Control', 'no-store').json(await casos.dashboard());
   }));
+  r.get('/reportes/alertas', autorizar('admin', 'operador', 'contador'), asyncH(async (req, res) => {
+    const dias = req.query.dias === undefined ? undefined : Number(req.query.dias);
+    res.set('Cache-Control', 'no-store').json(await casos.alertas(dias));
+  }));
+  r.get('/reportes/rentabilidad', autorizar('admin', 'contador'), asyncH(async (_req, res) => {
+    res.set('Cache-Control', 'no-store').json(await casos.rentabilidad());
+  }));
   r.get('/reportes/export', autorizar('admin', 'contador'), asyncH(async (req, res) => {
     const u = await usuariosRepo.porId(req.usuario.id);
     const { buffer, nombreArchivo } = await casos.exportar(String(req.query.tipo ?? ''), String(req.query.formato ?? ''), { id: req.usuario.id, nombre: u?.nombre });

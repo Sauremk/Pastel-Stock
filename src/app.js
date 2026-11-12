@@ -10,7 +10,7 @@ import { trace } from '@opentelemetry/api';
 
 import { crearLogger } from './shared/logger.js';
 import { crearValidadores } from './shared/validador.js';
-import { AppError, traducirErrorPg, noEncontrado } from './shared/errors.js';
+import { AppError, traducirErrorPg, noEncontrado, esBaseNoDisponible } from './shared/errors.js';
 import { asyncH } from './shared/http.js';
 
 import { crearUsuariosRepo, crearRefreshRepo } from './identity/adapters/pg/usuariosRepo.js';
@@ -24,6 +24,9 @@ import { crearInventarioRouter } from './inventory/adapters/http/inventarioRoute
 
 import { crearCasosCatalogo } from './catalog/application/casosDeUso.js';
 import { crearCatalogoRouter } from './catalog/adapters/http/catalogoRouter.js';
+
+import { crearCasosVentas } from './sales/application/casosDeUso.js';
+import { crearVentasRouter } from './sales/adapters/http/ventasRouter.js';
 
 import { crearCasosReportes } from './reporting/application/casosDeUso.js';
 import { crearReportesRouter } from './reporting/adapters/http/reportesRouter.js';
@@ -99,6 +102,7 @@ export function crearApp({ pool, config, reloj = () => new Date(), logger = crea
   const uowInventario = crearInventarioUow(pool);
   const casosInventario = crearCasosInventario({ uow: uowInventario });
   const casosCatalogo = crearCasosCatalogo({ pool, inventario: uowInventario });
+  const casosVentas = crearCasosVentas({ pool, catalogo: casosCatalogo, reloj, zona: 'America/Bogota' });
   const casosReportes = crearCasosReportes({ pool, reloj, zona: 'America/Bogota' });
 
   const api = express.Router();
@@ -110,6 +114,7 @@ export function crearApp({ pool, config, reloj = () => new Date(), logger = crea
   api.use(autenticar(authService)); // todo lo que sigue exige JWT (el contrato declara security global bearerAuth)
   api.use(crearInventarioRouter({ casos: casosInventario, validar }));
   api.use(crearCatalogoRouter({ casos: casosCatalogo, validar }));
+  api.use(crearVentasRouter({ casos: casosVentas, validar }));
   api.use(crearReportesRouter({ casos: casosReportes, usuariosRepo }));
   api.use((req) => { throw noEncontrado('Ruta', req.originalUrl); });
   app.use('/api/v1', api);
@@ -126,6 +131,11 @@ export function crearApp({ pool, config, reloj = () => new Date(), logger = crea
     }
     if (e.type === 'entity.parse.failed') return problema(res, req, 400, 'json-invalido', 'El cuerpo no es JSON válido');
     if (e.type === 'entity.too.large') return problema(res, req, 413, 'cuerpo-demasiado-grande', 'El cuerpo de la solicitud es demasiado grande');
+    if (esBaseNoDisponible(e)) {
+      req.log?.error({ err: { message: e.message, code: e.code } }, 'base de datos no disponible');
+      res.set('Retry-After', String(config.reintentarTrasSeg ?? 5));
+      return problema(res, req, 503, 'servicio-no-disponible', 'Servicio no disponible', 'La base de datos no responde. Intente de nuevo en unos segundos.');
+    }
     req.log?.error({ err: { message: e.message, stack: e.stack, code: e.code } }, 'error no controlado');
     return problema(res, req, 500, 'error-interno', 'Error interno del servidor');
   });
