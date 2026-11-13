@@ -117,7 +117,7 @@ h1[tabindex="-1"]:focus { outline: none; }
     animation: subir .45s ease both;
 }
 .login-header { text-align: center; margin-bottom: 28px; }
-.login-header .logo { font-size: 44px; display: inline-grid; place-items: center; width: 76px; height: 76px; border-radius: 22px; background: var(--color-acento-suave); margin-bottom: 14px; }
+.login-header .logo { display: block; width: 96px; height: 96px; margin: 0 auto 12px; border-radius: 22px; background: #fff; object-fit: contain; padding: 4px; }
 .login-header h1 { font-family: var(--fuente-titulo); font-size: 30px; letter-spacing: -.01em; }
 .login-header p { color: var(--color-texto-secundario); margin-top: 4px; font-size: 14px; }
 .login-error { background: var(--color-peligro-suave); color: var(--color-peligro); border-radius: var(--radio-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
@@ -143,7 +143,7 @@ h1[tabindex="-1"]:focus { outline: none; }
     overflow-y: auto;
 }
 .sidebar-header { padding: 24px 22px 18px; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; }
-.sidebar-header .logo { grid-row: span 2; font-size: 26px; width: 44px; height: 44px; display: grid; place-items: center; background: rgba(255, 255, 255, .08); border-radius: 12px; }
+.sidebar-header .logo { grid-row: span 2; width: 44px; height: 44px; display: block; background: #fff; border-radius: 12px; object-fit: contain; padding: 2px; }
 .sidebar-header h2 { font-family: var(--fuente-titulo); font-size: 20px; line-height: 1.1; color: #fff; }
 .sidebar-header p { font-size: 12px; color: var(--sidebar-tenue); }
 
@@ -407,6 +407,7 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
         box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
     }
     .topbar .marca { font-family: var(--fuente-titulo); font-size: 18px; flex: 1; display: flex; align-items: center; gap: 8px; }
+    .topbar .marca-logo { width: 32px; height: 32px; border-radius: 8px; background: #fff; object-fit: contain; padding: 1px; }
     .btn-menu, .btn-alertas-top { width: 42px; height: 42px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 20px; cursor: pointer; display: grid; place-items: center; position: relative; }
     .btn-alertas-top .nav-insignia { position: absolute; top: -4px; right: -4px; height: 20px; min-width: 20px; font-size: 11px; }
 
