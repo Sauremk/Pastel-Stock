@@ -1,6 +1,6 @@
 {
   "name": "pastel-stock",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Sistema de inventarios para pastelerías y panaderías (Dulce Hogar). Monolito modular con núcleo hexagonal.",
   "private": true,
   "type": "module",

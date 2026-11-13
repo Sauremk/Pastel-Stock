@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.4.1] — Logo de Pastel Stock (2026-11-12)
+
+### Cambiado
+- La app usa el logo oficial de Pastel Stock (pastel con cereza) en lugar del cupcake: ícono de la app instalable (192, 512, maskable y Apple), favicon, pantalla de inicio de sesión, menú lateral y barra superior del celular.
+- Se retiró `pwa/icons/icon.svg`; el favicon de la PWA ahora es `icons/icon-192.png`.
+
 ## [1.4.0] — Más fácil para quien empieza (2026-11-12)
 
 ### Cambiado

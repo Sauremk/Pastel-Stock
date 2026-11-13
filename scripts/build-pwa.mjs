@@ -58,7 +58,7 @@ html = html
     '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
     '<meta name="apple-mobile-web-app-title" content="Pastel Stock">',
     '<link rel="manifest" href="manifest.webmanifest">',
-    '<link rel="icon" href="icons/icon.svg" type="image/svg+xml">',
+    '<link rel="icon" href="icons/icon-192.png" type="image/png">',
     '<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">',
   ].join('\n    '));
 if (!html.includes('manifest.webmanifest')) throw new Error('No se pudo preparar index.html (cambió la etiqueta del ícono)');
@@ -81,7 +81,6 @@ await writeFile(a('manifest.webmanifest'), JSON.stringify({
     { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
     { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml' },
   ],
   shortcuts: [
     { name: 'Registrar venta', url: './#/ventas', icons: [{ src: 'icons/icon-192.png', sizes: '192x192' }] },
