@@ -13,6 +13,13 @@ export const UNIDADES = [
 
 export const ETIQUETAS_ROL = { admin: 'Administrador', operador: 'Operador', contador: 'Contador' };
 
+/** Qué puede hacer cada rol, en palabras de todos los días (pantalla Equipo, v1.5). */
+export const ROLES_EQUIPO = [
+  { valor: 'operador', texto: 'Operador: vende, hornea y anota lo que llega' },
+  { valor: 'contador', texto: 'Contador: ve ventas, ganancias y reportes' },
+  { valor: 'admin', texto: 'Administrador: puede hacer todo, también manejar el equipo' },
+];
+
 /** Permisos de interfaz (cosméticos: el servidor decide con RBAC en cada petición). */
 export const PERMISOS = {
   catalogo: ['admin'],
@@ -22,6 +29,7 @@ export const PERMISOS = {
   ventas: ['admin', 'operador'],
   ajustes: ['admin', 'operador'],
   rentabilidad: ['admin', 'contador'],
+  equipo: ['admin'],
 };
 
 /** Motivos de un ajuste por conteo físico (el contrato no admite STOCK_INICIAL desde la interfaz). */

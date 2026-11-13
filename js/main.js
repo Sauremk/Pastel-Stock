@@ -14,6 +14,7 @@ import { crearVista as vistaMovimientos } from './views/movimientos.js';
 import { crearVista as vistaVentas } from './views/ventas.js';
 import { crearVista as vistaAlertas } from './views/alertas.js';
 import { crearVista as vistaRentabilidad } from './views/rentabilidad.js';
+import { crearVista as vistaEquipo } from './views/equipo.js';
 import { mostrarAyuda } from './views/ayuda.js';
 
 const VISTAS = {
@@ -25,9 +26,10 @@ const VISTAS = {
   productos: vistaProductos,
   movimientos: vistaMovimientos,
   rentabilidad: vistaRentabilidad,
+  equipo: vistaEquipo,
 };
 /** Vistas que solo ven ciertos roles (cosmético: el servidor responde 403 de todos modos). */
-const PERMISO_VISTA = { rentabilidad: 'rentabilidad' };
+const PERMISO_VISTA = { rentabilidad: 'rentabilidad', equipo: 'equipo' };
 const VISTA_INICIAL = 'dashboard';
 
 const $ = (id) => document.getElementById(id);
@@ -73,6 +75,7 @@ function mostrarApp() {
   $('user-name').textContent = u.nombre;
   $('user-role').textContent = ETIQUETAS_ROL[u.rol] ?? u.rol;
   $('user-avatar').textContent = (u.nombre || '?').trim().charAt(0).toUpperCase();
+  $('nombre-tienda').textContent = `${u.tienda ?? 'Dulce Hogar'} · Inventarios`;
   document.querySelectorAll('[data-permiso]').forEach((n) => { n.hidden = !auth.puede(n.dataset.permiso); });
   navegar();
   refrescarAlertas();

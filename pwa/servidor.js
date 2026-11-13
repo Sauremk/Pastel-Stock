@@ -10,6 +10,7 @@ import { tipoDeAjuste } from '../src/inventory/domain/ajustes.js';
 import { costearReceta, margen, costoPromedio, redondear2 } from '../src/catalog/domain/costeo.js';
 import { validarLineas, liquidarVenta, comprobarVendible } from '../src/sales/domain/venta.js';
 import { armarDashboard, armarAlertasCaducidad, fechaLocal, sumarDias, DIAS_POR_VENCER } from '../src/reporting/domain/dashboard.js';
+import { validarNuevoUsuario, validarClave, comprobarCambio, vistaUsuario } from '../src/identity/domain/equipo.js';
 import { sembrarDemo, VERSION_DATOS } from './semilla.js';
 
 export const CLAVE_DATOS = 'pastel-stock.datos';
@@ -58,8 +59,10 @@ export async function hashClave(clave, sal) {
 /**
  * @param almacen { leer(): string|null, guardar(texto) } — localStorage en el navegador; un objeto en memoria en pruebas.
  * @param reloj () => Date
+ * @param inicial async ({ ahora, hashClave }) => datos — datos con los que arranca un almacén vacío (por defecto, la demo).
+ *   Una tienda creada por el usuario ya trae sus datos guardados; si faltan, `inicial` decide (v1.5, ADR-19).
  */
-export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
+export function crearServidorLocal({ almacen, reloj = () => new Date(), inicial = sembrarDemo } = {}) {
   let datos = null;
   const sesiones = new Map(); // accessToken → usuarioId (solo en memoria: se pierde al recargar)
 
@@ -70,7 +73,7 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
       try { datos = JSON.parse(texto); } catch { datos = null; }
     }
     if (!datos || datos.version !== VERSION_DATOS) {
-      datos = await sembrarDemo({ ahora: reloj(), hashClave });
+      datos = await inicial({ ahora: reloj(), hashClave });
       guardar();
     }
     return datos;
@@ -140,13 +143,13 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
   ruta('POST', '/auth/login', null, async ({ cuerpo }) => {
     exigir(cuerpo && esTexto(cuerpo.usuario, 1, 60) && typeof cuerpo.contrasena === 'string', 'Credenciales incompletas', 'Indique usuario y contraseña.');
     const u = datos.usuarios.find((x) => x.usuario === cuerpo.usuario.trim().toLowerCase());
-    if (!u || (await hashClave(cuerpo.contrasena, u.sal)) !== u.hash) throw noAutenticado('Usuario o contraseña incorrectos');
+    if (!u || (await hashClave(cuerpo.contrasena, u.sal)) !== u.hash || u.activo === false) throw noAutenticado('Usuario o contraseña incorrectos');
     return { status: 200, cuerpo: emitir(u) };
   });
   ruta('POST', '/auth/refresh', null, async ({ cuerpo }) => {
     const id = datos.sesiones?.[cuerpo?.refreshToken];
     const u = id && usuario(id);
-    if (!u) throw noAutenticado('Refresh token inválido o vencido');
+    if (!u || u.activo === false) throw noAutenticado('Refresh token inválido o vencido');
     await transaccion(async (d) => { delete d.sesiones[cuerpo.refreshToken]; });
     return { status: 200, cuerpo: emitir(u) };
   });
@@ -158,8 +161,51 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
     const claves = Object.keys(datos.sesiones);
     if (claves.length > 20) for (const k of claves.slice(0, claves.length - 20)) delete datos.sesiones[k];
     guardar();
-    return { accessToken, refreshToken, tokenType: 'Bearer', expiresIn: 900, rol: u.rol, nombre: u.nombre };
+    return { accessToken, refreshToken, tokenType: 'Bearer', expiresIn: 900, rol: u.rol, nombre: u.nombre, usuario: u.usuario, tienda: datos.tienda?.nombre ?? 'Dulce Hogar' };
   }
+  /** Cierra todas las sesiones de una persona (al desactivarla, cambiarle el rol o la contraseña). */
+  function revocarSesiones(d, id) {
+    for (const [k, v] of Object.entries(d.sesiones ?? {})) if (v === id) delete d.sesiones[k];
+    for (const [k, v] of sesiones) if (v === id) sesiones.delete(k);
+  }
+
+  // ---- Equipo (v1.5): mismas reglas que el servidor Node (src/identity/domain/equipo.js)
+  ruta('GET', '/usuarios', ['admin'], () => ({
+    cabeceras: { 'Cache-Control': 'no-store' },
+    cuerpo: { datos: [...datos.usuarios].map(vistaUsuario).sort((a, b) => (b.activo - a.activo) || a.nombre.localeCompare(b.nombre) || a.id - b.id) },
+  }));
+  ruta('POST', '/usuarios', ['admin'], async ({ cuerpo }) => {
+    soloCampos(cuerpo, ['usuario', 'nombre', 'rol', 'contrasena'], ['usuario', 'nombre', 'rol', 'contrasena']);
+    const nuevo = validarNuevoUsuario(cuerpo);
+    if (datos.usuarios.some((u) => u.usuario === nuevo.usuario)) throw conflicto('Ese nombre de usuario ya existe', `Elige otro distinto de "${nuevo.usuario}".`);
+    const sal = aleatorio(16); const hash = await hashClave(cuerpo.contrasena, sal);
+    return transaccion(async (d) => {
+      const u = { id: d.usuarios.reduce((m, x) => Math.max(m, x.id), 0) + 1, ...nuevo, activo: true, creadoEn: ahoraISO(), sal, hash };
+      d.usuarios.push(u);
+      return { status: 201, cuerpo: vistaUsuario(u) };
+    });
+  });
+  ruta('PATCH', '/usuarios/:id', ['admin'], ({ p, cuerpo, usuarioId }) => transaccion(async (d) => {
+    soloCampos(cuerpo, ['nombre', 'rol', 'activo']);
+    exigir(Object.keys(cuerpo).length > 0, 'Nada que cambiar', 'Indique nombre, rol o activo.');
+    const objetivo = usuario(Number(p.id)); if (!objetivo) throw noEncontrado('Usuario', p.id);
+    const adminsActivos = d.usuarios.filter((u) => u.rol === 'admin' && u.activo !== false).length;
+    comprobarCambio({ actorId: usuarioId, objetivo: { ...objetivo, activo: objetivo.activo !== false }, cambios: cuerpo, adminsActivos });
+    const rolAntes = objetivo.rol;
+    if (cuerpo.nombre !== undefined) objetivo.nombre = cuerpo.nombre.trim();
+    if (cuerpo.rol !== undefined) objetivo.rol = cuerpo.rol;
+    if (cuerpo.activo !== undefined) objetivo.activo = cuerpo.activo;
+    if (cuerpo.activo === false || objetivo.rol !== rolAntes) revocarSesiones(d, objetivo.id);
+    return { cuerpo: vistaUsuario(objetivo) };
+  }));
+  ruta('POST', '/usuarios/:id/contrasena', ['admin'], async ({ p, cuerpo }) => {
+    soloCampos(cuerpo, ['contrasena'], ['contrasena']);
+    validarClave(cuerpo.contrasena);
+    const objetivo = usuario(Number(p.id)); if (!objetivo) throw noEncontrado('Usuario', p.id);
+    const sal = aleatorio(16); const hash = await hashClave(cuerpo.contrasena, sal);
+    await transaccion(async (d) => { objetivo.sal = sal; objetivo.hash = hash; revocarSesiones(d, objetivo.id); });
+    return { status: 204 };
+  });
 
   // ---- Materias primas
   ruta('GET', '/materias-primas', TODOS, ({ q }) => {
@@ -573,6 +619,7 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
     return { status: 204 };
   }));
   ruta('POST', '/local/reiniciar', ['admin'], async () => {
+    exigir(!datos.tienda, 'No disponible', 'Solo la tienda de demostración vuelve a sus datos iniciales.');
     datos = await sembrarDemo({ ahora: reloj(), hashClave });
     sesiones.clear();
     guardar();
@@ -580,7 +627,7 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
   });
   ruta('POST', '/local/contrasena', TODOS, async ({ cuerpo, usuarioId }) => {
     soloCampos(cuerpo, ['actual', 'nueva'], ['actual', 'nueva']);
-    exigir(typeof cuerpo.nueva === 'string' && cuerpo.nueva.length >= 8 && cuerpo.nueva.length <= 128, 'Contraseña muy corta', 'Use al menos 8 caracteres.');
+    exigir(typeof cuerpo.nueva === 'string' && cuerpo.nueva.length >= 8 && cuerpo.nueva.length <= 72, 'Contraseña inválida', 'Use entre 8 y 72 caracteres.');
     const u = usuario(usuarioId);
     if ((await hashClave(cuerpo.actual, u.sal)) !== u.hash) throw validacion('La contraseña actual no es correcta');
     const sal = aleatorio(16); const hash = await hashClave(cuerpo.nueva, sal);
@@ -602,7 +649,7 @@ export function crearServidorLocal({ almacen, reloj = () => new Date() } = {}) {
       const token = /^Bearer (.+)$/.exec(cabeceras.authorization ?? '')?.[1];
       usuarioId = token ? sesiones.get(token) : undefined;
       const u = usuarioId && usuario(usuarioId);
-      if (!u) throw noAutenticado();
+      if (!u || u.activo === false) throw noAutenticado();
       if (!destino.roles.includes(u.rol)) throw prohibido();
     }
     if (p.codigo !== undefined && !RE_MP.test(p.codigo)) throw validacion('Parámetro "codigo" inválido', 'Use el formato MP001.');

@@ -42,7 +42,7 @@ export function crearAuth({ fetchImpl = (...a) => globalThis.fetch(...a), storag
 
   function aplicar(par) {
     estado.accessToken = par.accessToken;
-    estado.usuario = { nombre: par.nombre ?? par.rol, rol: par.rol };
+    estado.usuario = { nombre: par.nombre ?? par.rol, rol: par.rol, usuario: par.usuario ?? null, tienda: par.tienda ?? null };
     almacen.guardar(par.refreshToken);
   }
 

@@ -815,3 +815,12 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 }
 @media (max-width: 400px) { .pestana > span { display: none; } }
 .resumen-venta .total:first-child { border-top: 0; padding-top: 0; }
+
+/* Equipo (v1.5) */
+tr.fila-inactiva td { color: var(--color-texto-secundario); }
+/* Tiendas en el inicio de sesión (app sin servidor, v1.5) */
+.selector-tienda { display: grid; gap: 6px; margin-bottom: 14px; }
+.selector-tienda .fila { display: flex; gap: 8px; align-items: stretch; }
+.selector-tienda select { flex: 1; min-width: 0; }
+.btn-enlace { background: none; border: none; color: var(--color-acento); font-weight: 600; text-decoration: underline; cursor: pointer; padding: 10px 2px; min-height: 44px; font-size: 15px; }
+.btn-enlace:hover { color: var(--color-acento-hover, var(--color-acento)); }
