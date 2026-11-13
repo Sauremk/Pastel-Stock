@@ -11,14 +11,14 @@ const respuesta = (status, cuerpo, cabeceras = {}) => ({
   json: async () => { if (cuerpo === undefined) throw new Error('sin cuerpo'); return cuerpo; },
   blob: async () => ({ tamano: 3, tipo: 'application/pdf' }),
 });
-const par = (n, rol = 'admin') => ({ accessToken: `acc${n}`, refreshToken: `ref${n}`, expiraEn: 900, rol, nombre: 'Ana García' });
+const par = (n, rol = 'admin') => ({ accessToken: `acc${n}`, refreshToken: `ref${n}`, expiraEn: 900, rol, nombre: 'Ana García', usuario: 'admin', tienda: 'Dulce Hogar' });
 const almacen = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), _m: m }; };
 
 test('auth: access token solo en memoria; refresh token en sessionStorage', async () => {
   const storage = almacen();
   const auth = crearAuth({ storage, fetchImpl: async () => respuesta(200, par(1)) });
   const u = await auth.iniciarSesion('admin', 'clave-larga-1');
-  assert.deepEqual(u, { nombre: 'Ana García', rol: 'admin' });
+  assert.deepEqual(u, { nombre: 'Ana García', rol: 'admin', usuario: 'admin', tienda: 'Dulce Hogar' });
   assert.equal(auth.token(), 'acc1');
   assert.equal(storage.getItem('ps.refresh'), 'ref1');
   assert.deepEqual([...storage._m.values()].includes('acc1'), false); // el access token nunca se persiste

@@ -9,7 +9,7 @@ const OPCIONES = { algorithms: ['HS256'], issuer: 'pastel-stock', audience: 'pas
  * Casos de uso de Identidad: login, renovación con rotación de refresh token y verificación de access token.
  * Depende de puertos (usuariosRepo, refreshRepo), no de Express ni de pg (ADR-04).
  */
-export function crearAuthService({ usuariosRepo, refreshRepo, secreto, accessTtl, refreshTtl, bcryptCost }) {
+export function crearAuthService({ usuariosRepo, refreshRepo, secreto, accessTtl, refreshTtl, bcryptCost, tienda = 'Dulce Hogar' }) {
   const firmar = (payload, ttl) => jwt.sign(payload, secreto, { algorithm: 'HS256', expiresIn: ttl, issuer: OPCIONES.issuer, audience: OPCIONES.audience });
   const hashFicticio = bcrypt.hashSync('relleno-para-igualar-tiempos', bcryptCost);
 
@@ -22,6 +22,8 @@ export function crearAuthService({ usuariosRepo, refreshRepo, secreto, accessTtl
       expiraEn: accessTtl,
       rol: usuario.rol,
       nombre: usuario.nombre,
+      usuario: usuario.usuario,
+      tienda,
     };
   }
 

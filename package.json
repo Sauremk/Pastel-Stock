@@ -1,6 +1,6 @@
 {
   "name": "pastel-stock",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Sistema de inventarios para pastelerías y panaderías (Dulce Hogar). Monolito modular con núcleo hexagonal.",
   "private": true,
   "type": "module",
@@ -26,7 +26,7 @@
     "test:contract": "node --test --no-warnings \"tests/contract/**/*.test.js\"",
     "test:cov": "c8 --all --src=src --reporter=lcov --reporter=text-summary --check-coverage --lines=70 node --test --test-concurrency=2 --no-warnings \"tests/**/*.test.js\"",
     "openapi:lint": "redocly lint openapi/openapi.yaml",
-    "test:e2e": "node --test --test-concurrency=1 tests/e2e/",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.e2e.js\"",
     "build:pwa": "node scripts/build-pwa.mjs"
   },
   "dependencies": {

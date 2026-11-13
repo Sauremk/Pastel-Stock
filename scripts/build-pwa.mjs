@@ -32,6 +32,7 @@ const dominio = [
   'src/catalog/domain/costeo.js', 'src/sales/domain/venta.js',
   'src/reporting/domain/dashboard.js', 'src/reporting/domain/definicionesReporte.js',
   'src/db/datosDemo.js',
+  'src/identity/domain/roles.js', 'src/identity/domain/equipo.js',
 ];
 for (const f of dominio) {
   const texto = await readFile(de(f), 'utf8');

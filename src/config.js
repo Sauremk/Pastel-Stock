@@ -19,6 +19,7 @@ export function cargarConfig(env = process.env) {
     dirWeb: env.WEB_DIR,
     accessTtlSeg: entero(env.ACCESS_TTL_SECONDS, 15 * 60),
     refreshTtlSeg: entero(env.REFRESH_TTL_SECONDS, 7 * 24 * 60 * 60),
+    nombreTienda: env.TIENDA_NOMBRE?.trim() || 'Dulce Hogar',
   };
   return config;
 }
