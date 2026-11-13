@@ -2,6 +2,7 @@
 import {
   h, reemplazarHijos, cargando, vacio, bannerError, tabla, insignia, paginador, debounce, encabezadoVista,
   abrirModal, confirmar, toast, toastError, campo, idCampo, selectControl, mostrarErrores, crearAvisoFormulario, conBotonOcupado,
+  pestanasInventario, siguienteCodigo,
 } from '../ui.js';
 import { CATEGORIAS_MP, UNIDADES } from '../catalogos.js';
 import { formatoCOP, formatoNumero, infoEstado, mensajeDeError } from '../format.js';
@@ -17,25 +18,24 @@ export function crearVista(ctx) {
   let marcaCarga = 0;
 
   const zona = h('div', { class: 'table-zona' });
-  const buscar = h('input', { type: 'search', id: 'mp-buscar', placeholder: 'Buscar por código o nombre…', 'aria-label': 'Buscar materia prima', maxlength: '60' });
-  const selCategoria = selectControl(CATEGORIAS_MP, { placeholder: 'Todas las categorías', class: 'filter-select', 'aria-label': 'Filtrar por categoría' });
-  const selEstado = selectControl([{ valor: 'CRITICO', texto: 'Crítico' }, { valor: 'BAJO', texto: 'Bajo' }, { valor: 'OPTIMO', texto: 'Óptimo' }],
-    { placeholder: 'Todos los estados', class: 'filter-select', 'aria-label': 'Filtrar por estado de stock' });
+  const buscar = h('input', { type: 'search', id: 'mp-buscar', placeholder: 'Buscar un ingrediente…', 'aria-label': 'Buscar ingrediente', maxlength: '60' });
+  const selEstado = selectControl([{ valor: 'CRITICO', texto: 'Muy poco' }, { valor: 'BAJO', texto: 'Poco' }, { valor: 'OPTIMO', texto: 'Suficiente' }],
+    { placeholder: 'Cualquier cantidad', class: 'filter-select', 'aria-label': 'Filtrar por cantidad' });
 
-  const botonNueva = puedeEditar ? h('button', { type: 'button', class: 'btn', onClick: () => abrirFormulario(null) }, '+ Nueva') : null;
+  const botonNueva = puedeEditar ? h('button', { type: 'button', class: 'btn', onClick: () => abrirFormulario(null) }, '＋ Agregar ingrediente') : null;
 
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-materias' },
-    encabezadoVista('Materias primas'),
+    encabezadoVista('Inventario', 'Lo que tienes en bodega. Si la cantidad real es distinta, toca «Contar».'),
+    pestanasInventario('materias'),
     h('div', { class: 'panel' },
       h('div', { class: 'panel-header' },
         h('div', { class: 'search-box' }, buscar),
-        selCategoria, selEstado,
+        selEstado,
         h('div', { class: 'panel-actions' }, botonesExportar(ctx, 'materias'), botonNueva)),
       zona));
   el.querySelector('h1').id = 'titulo-materias';
 
   buscar.addEventListener('input', debounce(() => { estado.q = buscar.value.trim(); estado.pagina = 1; cargar(); }));
-  selCategoria.addEventListener('change', () => { estado.categoria = selCategoria.value; estado.pagina = 1; cargar(); });
   selEstado.addEventListener('change', () => { estado.estado = selEstado.value; estado.pagina = 1; cargar(); });
 
   async function cargar() {
@@ -54,53 +54,59 @@ export function crearVista(ctx) {
   function pintar({ datos, paginacion }) {
     if (datos.length === 0) {
       const filtrando = estado.q || estado.categoria || estado.estado;
-      reemplazarHijos(zona, vacio(filtrando ? 'Ninguna materia prima coincide con los filtros.' : 'Aún no hay materias primas registradas.'));
+      reemplazarHijos(zona, vacio(filtrando ? 'Ningún ingrediente coincide con la búsqueda.' : 'Aún no hay ingredientes. Toca «Agregar ingrediente».'));
       return;
     }
-    const columnas = [{ titulo: 'Código' }, { titulo: 'Nombre' }, { titulo: 'Categoría' }, { titulo: 'Stock', num: true }, { titulo: 'Unidad' },
-      { titulo: 'Mínimo', num: true }, { titulo: 'Costo (COP)', num: true }, { titulo: 'Estado' }, { titulo: 'Acciones' }];
+    const columnas = [{ titulo: 'Ingrediente' }, { titulo: 'Hay', num: true }, { titulo: 'Avisar bajo', num: true }, { titulo: '¿Alcanza?' }, { titulo: '' }];
     const filas = datos.map((m) => {
       const e = infoEstado(m.estado);
       const acciones = puedeEditar || puedeAjustar
         ? h('div', { class: 'action-buttons' },
-          puedeAjustar ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Ajustar stock de ${m.nombre} por conteo`, title: 'Ajustar por conteo', onClick: () => abrirAjuste({ api, tipo: 'materia', item: m, alTerminar: () => { ctx.refrescarAlertas?.(); cargar(); } }) }, '⚖️') : null,
-          puedeEditar ? h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${m.nombre}`, title: 'Editar', onClick: () => abrirFormulario(m) }, '✏️') : null,
-          puedeEditar ? h('button', { type: 'button', class: 'btn-icon delete', 'aria-label': `Eliminar ${m.nombre}`, title: 'Eliminar', onClick: () => eliminar(m) }, '🗑️') : null)
+          puedeAjustar ? h('button', { type: 'button', class: 'btn-icon', 'aria-label': `Contar ${m.nombre}`, onClick: () => abrirAjuste({ api, tipo: 'materia', item: m, alTerminar: () => { ctx.refrescarAlertas?.(); cargar(); } }) }, '⚖️ Contar') : null,
+          puedeEditar ? h('button', { type: 'button', class: 'btn-icon edit', 'aria-label': `Editar ${m.nombre}`, onClick: () => abrirFormulario(m) }, '✏️ Editar') : null)
         : h('span', { class: 'solo-lectura' }, 'Solo lectura');
-      return { celdas: [m.codigo, m.nombre, m.categoria, formatoNumero(m.stock), m.unidad, formatoNumero(m.minimo), formatoCOP(m.costo), insignia(e.texto, e.clase), acciones] };
+      return { celdas: [
+        h('span', {}, m.nombre, h('span', { class: 'sub' }, puedeEditar ? `${m.categoria} · ${formatoCOP(m.costo)} por ${m.unidad}` : m.categoria)),
+        `${formatoNumero(m.stock)} ${m.unidad}`, `${formatoNumero(m.minimo)} ${m.unidad}`, insignia(e.texto, e.clase), acciones] };
     });
     reemplazarHijos(zona,
-      tabla({ columnas, filas, descripcion: 'Listado de materias primas' }),
+      tabla({ columnas, filas, descripcion: 'Ingredientes' }),
       paginador({ ...paginacion, alCambiar: (p) => { estado.pagina = p; cargar(); } }));
   }
 
   async function eliminar(m) {
-    const ok = await confirmar({ titulo: 'Eliminar materia prima', mensaje: `¿Eliminar «${m.nombre}» (${m.codigo})? Esta acción no se puede deshacer.` });
-    if (!ok) return;
+    const ok = await confirmar({ titulo: 'Eliminar ingrediente', mensaje: `¿Eliminar «${m.nombre}»? Esta acción no se puede deshacer.` });
+    if (!ok) return false;
     try {
       await api.del(`/materias-primas/${encodeURIComponent(m.codigo)}`);
-      toast('Materia prima eliminada');
+      toast('Ingrediente eliminado');
       cargar();
-    } catch (e) { toastError(e); }
+      return true;
+    } catch (e) { toastError(e); return false; }
   }
 
-  function abrirFormulario(existente) {
+  async function abrirFormulario(existente) {
     const editando = existente !== null;
+    // El código se asigna solo (MP006…): la persona no tiene que inventarlo.
+    let codigoNuevo = null;
+    if (!editando) {
+      try { codigoNuevo = siguienteCodigo('MP', (await api.get('/materias-primas', { limite: 100 })).datos.map((m) => m.codigo)); } catch { codigoNuevo = null; }
+    }
     const aviso = crearAvisoFormulario();
     const campos = {};
     const nuevo = (nombre, config) => { campos[nombre] = campo({ id: idCampo(`mp-${nombre}`), ...config }); return campos[nombre]; };
 
     if (!editando) {
-      nuevo('codigo', { etiqueta: 'Código', requerido: true, ayuda: 'Formato MP006', control: h('input', { type: 'text', placeholder: 'MP006', maxlength: '12', autocomplete: 'off' }) });
+      nuevo('codigo', { etiqueta: 'Código', requerido: true, ayuda: 'Se asigna solo; puedes dejarlo así.', control: h('input', { type: 'text', value: codigoNuevo ?? '', placeholder: 'MP006', maxlength: '12', autocomplete: 'off' }) });
     }
     nuevo('nombre', { etiqueta: 'Nombre', requerido: true, control: h('input', { type: 'text', value: existente?.nombre ?? '', maxlength: '80', placeholder: 'Ej. Harina de almendra' }) });
     nuevo('categoria', { etiqueta: 'Categoría', requerido: true, control: selectControl(CATEGORIAS_MP, { valor: existente?.categoria ?? '', placeholder: 'Seleccionar…' }) });
-    nuevo('unidad', { etiqueta: 'Unidad', requerido: true, control: selectControl(UNIDADES, { valor: existente?.unidad ?? 'g' }) });
+    nuevo('unidad', { etiqueta: 'Se mide en', requerido: true, control: selectControl(UNIDADES, { valor: existente?.unidad ?? 'g' }) });
     if (!editando) {
-      nuevo('stock', { etiqueta: 'Stock inicial', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '0' }) });
+      nuevo('stock', { etiqueta: 'Cantidad que tienes ahora', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '0' }) });
     }
-    nuevo('minimo', { etiqueta: 'Stock mínimo', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.minimo ?? '', placeholder: '0' }) });
-    nuevo('costo', { etiqueta: 'Costo unitario (COP)', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.costo ?? '', placeholder: 'Ej. 2500' }) });
+    nuevo('minimo', { etiqueta: 'Avisarme cuando queden menos de', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.minimo ?? '', placeholder: '0' }) });
+    nuevo('costo', { etiqueta: 'Cuánto te cuesta cada unidad ($)', requerido: true, control: h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: existente?.costo ?? '', placeholder: 'Ej. 2500' }) });
 
     const guardar = h('button', { type: 'submit', class: 'btn' }, 'Guardar');
     const form = h('form', { novalidate: true },
@@ -109,13 +115,15 @@ export function crearVista(ctx) {
       campos.nombre.grupo,
       h('div', { class: 'form-row' }, campos.categoria.grupo, campos.unidad.grupo),
       editando
-        ? h('div', { class: 'form-group' }, h('div', { class: 'ayuda' }, 'Stock actual'),
-          h('div', { class: 'campo-solo-lectura' }, `${formatoNumero(existente.stock)} ${existente.unidad} — el stock solo cambia con movimientos (entradas y producción).`))
+        ? h('div', { class: 'form-group' }, h('div', { class: 'ayuda' }, 'Cantidad actual'),
+          h('div', { class: 'campo-solo-lectura' }, `${formatoNumero(existente.stock)} ${existente.unidad} — para corregirla usa «Contar».`))
         : campos.stock.grupo,
       h('div', { class: 'form-row' }, campos.minimo.grupo, campos.costo.grupo),
-      h('div', { class: 'form-acciones' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => modal.cerrar() }, 'Cancelar'), guardar));
+      h('div', { class: 'form-acciones' },
+        editando ? h('button', { type: 'button', class: 'btn btn-link texto-peligro', onClick: async () => { if (await eliminar(existente)) modal.cerrar(); } }, 'Eliminar ingrediente') : null,
+        h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => modal.cerrar() }, 'Cancelar'), guardar));
 
-    const modal = abrirModal({ titulo: editando ? `Editar ${existente.codigo}` : 'Nueva materia prima', contenido: form });
+    const modal = abrirModal({ titulo: editando ? `Editar ${existente.nombre}` : 'Agregar ingrediente', contenido: form });
 
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -128,7 +136,7 @@ export function crearVista(ctx) {
         await conBotonOcupado(guardar, () => (editando
           ? api.put(`/materias-primas/${encodeURIComponent(existente.codigo)}`, datos)
           : api.post('/materias-primas', datos)));
-        toast(editando ? 'Materia prima actualizada' : 'Materia prima creada');
+        toast(editando ? 'Ingrediente actualizado' : 'Ingrediente agregado');
         modal.cerrar();
         cargar();
       } catch (e) {
@@ -138,5 +146,5 @@ export function crearVista(ctx) {
     });
   }
 
-  return { el, titulo: 'Materias primas', cargar, destruir() { marcaCarga++; } };
+  return { el, titulo: 'Ingredientes', cargar, destruir() { marcaCarga++; } };
 }

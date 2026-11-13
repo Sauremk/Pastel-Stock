@@ -256,3 +256,17 @@ export function encabezadoVista(titulo, ...extra) {
     h('div', {}, h('h1', { tabindex: '-1' }, titulo), subtitulo ? h('p', { class: 'subtitulo' }, subtitulo) : null),
     ...extra);
 }
+
+/** Pestañas de la sección Inventario (Ingredientes · Productos · Entradas): tres pantallas, un solo lugar en el menú. */
+export function pestanasInventario(actual) {
+  const pestanas = [['materias', '🧂', 'Ingredientes'], ['productos', '🎂', 'Productos'], ['movimientos', '📦', 'Entradas']];
+  return h('nav', { class: 'pestanas', 'aria-label': 'Secciones del inventario' },
+    ...pestanas.map(([vista, icono, texto]) => h('a', { class: 'pestana', href: `#/${vista}`, 'aria-current': vista === actual ? 'page' : null },
+      h('span', { 'aria-hidden': 'true' }, icono), texto)));
+}
+
+/** Siguiente código libre con un prefijo (MP006, PT005): la persona no tiene que inventarlo. */
+export function siguienteCodigo(prefijo, existentes) {
+  const max = existentes.map((c) => Number(String(c).replace(prefijo, ''))).filter(Number.isFinite).reduce((a, b) => Math.max(a, b), 0);
+  return `${prefijo}${String(max + 1).padStart(3, '0')}`;
+}

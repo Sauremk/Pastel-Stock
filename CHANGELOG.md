@@ -2,6 +2,75 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.4.1] — Logo de Pastel Stock (2026-11-12)
+
+### Cambiado
+- La app usa el logo oficial de Pastel Stock (pastel con cereza) en lugar del cupcake: ícono de la app instalable (192, 512, maskable y Apple), favicon, pantalla de inicio de sesión, menú lateral y barra superior del celular.
+- Se retiró `pwa/icons/icon.svg`; el favicon de la PWA ahora es `icons/icon-192.png`.
+
+## [1.4.0] — Más fácil para quien empieza (2026-11-12)
+
+### Cambiado
+- **Menú de 5 opciones** en palabras de todos los días: Inicio, Vender, Hornear, Inventario y Avisos. Las demás quedan en «Más» (Ganancias y «¿Cómo se usa?»).
+- **Barra inferior en el celular**, como en las apps de mensajería: Inicio, Vender, Hornear, Inventario y Más.
+- **Inventario en un solo lugar**, con tres pestañas: Ingredientes, Productos y Entradas.
+- **Inicio:**
+  - botones grandes de «¿Qué quieres hacer?»: Registrar una venta, Hornear, Llegaron ingredientes y Contar el inventario. Cada uno lleva directo a la acción (`#/ventas/nueva`, `#/recetas/hornear`, `#/movimientos/entrada`);
+  - los gráficos y detalles quedan plegados en «Ver más detalles»;
+  - guía de bienvenida la primera vez.
+- **Lenguaje simple:**
+  - se reemplazaron los términos técnicos: materias primas → ingredientes, kardex → historial, stock mínimo → «avisar bajo», margen → ganancia, ROI → rendimiento;
+  - los estados se llaman Suficiente / Poco / Muy poco y Fresco / Vence pronto / Vencido;
+  - el SKU ya no se muestra.
+- **Botones con texto** («Contar», «Historial», «Editar») en lugar de íconos solos. «Eliminar» queda dentro de «Editar», para evitar borrados por error.
+- **Códigos automáticos** al crear ingredientes y productos (MP006, PT005).
+- **Hornear:** una tarjeta por producto con un solo botón grande y los ingredientes desplegables.
+- **Vender:** preguntas en lugar de etiquetas («¿Qué vendiste?», «¿Cuántos?»). Quien vende solo ve el «Total a cobrar»; costos y ganancia, solo el administrador y el contador.
+- **Accesibilidad:**
+  - letra base de 16 px;
+  - botones y campos de 46 a 48 px de alto;
+  - en el celular, los mensajes aparecen arriba para no tapar los botones.
+
+### Verificado
+- axe-core: 0 violaciones WCAG 2 A/AA en 64 combinaciones (8 pantallas × 2 temas × 2 tamaños × 2 roles).
+- 174 pruebas y 7 E2E; la nueva E2E cubre la guía y el atajo de venta.
+
+## [1.3.0] — Tablero «obrador en vivo» (2026-11-12)
+
+### Cambiado
+- **Tablero rediseñado** con los mismos datos reales:
+  - portada con aurora animada, chispas, saludo según la hora y reloj;
+  - ventas de 30 días que cuentan al aparecer, con curva de 7 días que se dibuja;
+  - chips de margen, ventas, ticket promedio y mejor día;
+  - anillos de progreso para margen, ROI, salud del inventario y frescura;
+  - tarjetas con brillo que sigue al puntero;
+  - podio de más vendidos con medallas y barras animadas;
+  - «Pulso de la pastelería» (ventas y movimientos recientes);
+  - barras de insumos bajo mínimo y gráficos con degradados;
+  - esqueleto de carga.
+- Con «reducir movimiento» activado en el sistema, todo aparece sin animación.
+- `GET /movimientos` incluye `nombre` y `unidad` de la materia prima.
+
+### Corregido
+- `h()` no aplicaba propiedades CSS personalizadas (`--x`) en el atributo `style`.
+
+### Verificado
+- axe-core: 0 violaciones WCAG 2 A/AA en el tablero (claro y oscuro, 1440 px y 390 px).
+- 174 pruebas y 6 E2E en verde.
+
+## [1.2.0] — App instalable sin servidor (2026-11-12)
+
+### Añadido
+- **PWA** (ADR-18): `npm run build:pwa` genera `dist-pwa/`, una versión que se abre con un enlace, se instala en el celular y funciona sin internet. Usa la misma interfaz y las mismas reglas de negocio; la API la responde el navegador (`pwa/servidor.js`) y los datos quedan en el dispositivo.
+- «Datos y cuenta» (solo PWA): descargar y restaurar respaldo, cambiar contraseña y reiniciar los datos de demostración; botón «Instalar la app».
+- Exportación PDF y Excel dentro del navegador, con el mismo formato que el servidor.
+- Workflow `pages` para publicar en GitHub Pages; 6 pruebas `tests/pwa/` que verifican las mismas cifras que el servidor.
+- Ícono de la app (cupcake) en SVG y PNG, incluido el maskable para Android.
+
+### Cambiado
+- Los datos demo (`src/db/datosDemo.js`) y las definiciones de reportes (`src/reporting/domain/definicionesReporte.js`) se separaron para compartirlos entre el servidor y la PWA.
+- `index.html` usa rutas relativas (funciona servido desde una subcarpeta).
+
 ## [1.1.0] — Aplicativo mejorado (2026-11-12)
 
 ### Añadido

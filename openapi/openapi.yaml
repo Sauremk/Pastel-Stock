@@ -1357,6 +1357,11 @@ components:
           type: integer
         codigo:
           type: string
+        nombre:
+          type: string
+          description: Nombre de la materia prima (v1.3).
+        unidad:
+          $ref: '#/components/schemas/UnidadMedida'
         tipo:
           $ref: '#/components/schemas/TipoMovimiento'
         motivo:

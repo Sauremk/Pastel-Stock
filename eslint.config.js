@@ -2,10 +2,10 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['node_modules/', 'coverage/', '.pgdata/', 'web/vendor/', 'k6/'] },
+  { ignores: ['node_modules/', 'coverage/', '.pgdata/', 'web/vendor/', 'k6/', 'dist-pwa/**'] },
   js.configs.recommended,
   {
-    files: ['src/**/*.js', 'scripts/**/*.js', 'tests/**/*.js', 'tools/**/*.js'],
+    files: ['src/**/*.js', 'scripts/**/*.js', 'scripts/**/*.mjs', 'tests/**/*.js', 'tools/**/*.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node } },
     rules: {
       complexity: ['warn', 10],            // McCabe > 10 = método difícil de probar (Guía 1)
@@ -22,7 +22,7 @@ export default [
     languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: { ...globals.node } },
   },
   {
-    files: ['web/**/*.js'],
+    files: ['web/**/*.js', 'pwa/**/*.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser, Chart: 'readonly' } },
     rules: { 'no-unused-vars': ['error', { argsIgnorePattern: '^_' }], eqeqeq: 'error', 'no-eval': 'error', 'no-restricted-properties': ['error', { property: 'innerHTML', message: 'Prohibido innerHTML con datos (XSS, DT-03). Use h()/textContent.' }] },
   },

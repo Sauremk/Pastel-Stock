@@ -6,6 +6,16 @@ Sistema de inventario, producción y ventas para una pastelería: materias prima
 - Autor: Kevin Andres Rojas Marin (desarrollador full-stack, líder, QA/DevOps)
 - Asesor: Abel Fernando Becerra Carrillo — Ingeniería de Software II, Universidad de Pamplona
 
+## App sin servidor (PWA)
+
+La forma más rápida de usarlo: **ábrelo en el navegador, instálalo en el celular y úsalo sin internet.** Es la misma aplicación (misma interfaz y mismas reglas de negocio), pero la API corre dentro del navegador y los datos quedan en el dispositivo ([ADR-18](docs/adr/ADR-18-pwa-sin-servidor.md)).
+
+- Enlace: <https://sauremk.github.io/Pastel-Stock/>
+- Usuarios de prueba: `admin`, `operador` o `contador`, contraseña `dulcehogar` (cada uno puede cambiarla en «Datos y cuenta»).
+- **Instalar:** en Android, Chrome → menú ⋮ → «Instalar aplicación» (o el botón «📲 Instalar la app»). En iPhone, Safari → Compartir → «Agregar a pantalla de inicio».
+- **Respaldo:** los datos viven solo en ese dispositivo. Descarga un respaldo desde «Datos y cuenta» con regularidad.
+- Construir: `npm run build:pwa` (sale en `dist-pwa/`). Probar: `npx serve dist-pwa` o cualquier servidor estático.
+
 ## Requisitos
 
 - Node.js 22+ y npm
@@ -74,6 +84,7 @@ Los valores de ejemplo están en [`.env.example`](.env.example).
 | `npm test` | Todas las pruebas |
 | `npm run test:unit` / `test:integration` / `test:contract` | Por nivel |
 | `npm run test:cov` | Pruebas con cobertura |
+| `npm run build:pwa` | Genera la app sin servidor en `dist-pwa/` (ver «App sin servidor») |
 | `npm run test:e2e` | Flujos en navegador real con Playwright (antes: `npx playwright install chromium`) |
 | `npm run openapi:lint` | Valida el contrato OpenAPI |
 

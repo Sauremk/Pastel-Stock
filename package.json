@@ -1,6 +1,6 @@
 {
   "name": "pastel-stock",
-  "version": "1.1.0",
+  "version": "1.4.1",
   "description": "Sistema de inventarios para pastelerías y panaderías (Dulce Hogar). Monolito modular con núcleo hexagonal.",
   "private": true,
   "type": "module",
@@ -21,12 +21,13 @@
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js",
     "test": "node --test --test-concurrency=2 --no-warnings \"tests/**/*.test.js\"",
-    "test:unit": "node --test --no-warnings \"tests/unit/**/*.test.js\" \"tests/web/**/*.test.js\"",
+    "test:unit": "node --test --no-warnings \"tests/unit/**/*.test.js\" \"tests/web/**/*.test.js\" \"tests/pwa/**/*.test.js\"",
     "test:integration": "node --test --test-concurrency=2 --no-warnings \"tests/integration/**/*.test.js\"",
     "test:contract": "node --test --no-warnings \"tests/contract/**/*.test.js\"",
     "test:cov": "c8 --all --src=src --reporter=lcov --reporter=text-summary --check-coverage --lines=70 node --test --test-concurrency=2 --no-warnings \"tests/**/*.test.js\"",
     "openapi:lint": "redocly lint openapi/openapi.yaml",
-    "test:e2e": "node --test --test-concurrency=1 tests/e2e/"
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/",
+    "build:pwa": "node scripts/build-pwa.mjs"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",

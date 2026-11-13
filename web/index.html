@@ -6,8 +6,8 @@
     <meta name="color-scheme" content="light dark">
     <title>Pastel Stock — Inventarios para pastelerías</title>
     <meta name="description" content="Pastel Stock: inventario de materias primas, recetas y productos terminados para Dulce Hogar.">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%81%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="img/logo.png" type="image/png">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <a class="skip-link" href="#contenido">Saltar al contenido</a>
@@ -21,7 +21,7 @@
     <div class="login-screen" id="login-screen" hidden>
         <div class="login-card">
             <div class="login-header">
-                <div class="logo" aria-hidden="true">🧁</div>
+                <img class="logo" src="img/logo.png" alt="" width="96" height="96">
                 <h1>Pastel Stock</h1>
                 <p>Sistema de gestión de inventarios · Dulce Hogar</p>
             </div>
@@ -46,14 +46,13 @@
     <!-- APP -->
     <div class="app-container" id="app-container">
         <header class="topbar">
-            <button type="button" class="btn-menu" id="btn-menu" aria-label="Abrir menú" aria-controls="menu-lateral" aria-expanded="false">☰</button>
-            <span class="marca"><span aria-hidden="true">🧁</span> Pastel Stock</span>
-            <button type="button" class="btn-alertas-top" id="btn-alertas-top" aria-label="Ver alertas">🔔<span class="nav-insignia" data-insignia-alertas hidden></span></button>
+            <span class="marca"><img class="marca-logo" src="img/logo.png" alt="" width="32" height="32"> Pastel Stock</span>
+            <button type="button" class="btn-alertas-top" id="btn-alertas-top" aria-label="Ver avisos">🔔<span class="nav-insignia" data-insignia-alertas hidden></span></button>
         </header>
         <div class="velo-menu" id="velo-menu" hidden></div>
         <aside class="sidebar" id="menu-lateral">
             <div class="sidebar-header">
-                <span class="logo" aria-hidden="true">🧁</span>
+                <img class="logo" src="img/logo.png" alt="" width="44" height="44">
                 <h2>Pastel Stock</h2>
                 <p>Dulce Hogar · Inventarios</p>
             </div>
@@ -67,38 +66,17 @@
             </div>
 
             <nav aria-label="Secciones">
-                <p class="nav-grupo" aria-hidden="true">Día a día</p>
                 <ul>
-                    <li><button type="button" class="nav-item" data-vista="dashboard">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/></svg>
-                        <span>Tablero</span></button></li>
-                    <li><button type="button" class="nav-item" data-vista="ventas">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
-                        <span>Ventas</span></button></li>
-                    <li><button type="button" class="nav-item" data-vista="alertas">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/></svg>
-                        <span>Alertas</span><span class="nav-insignia" data-insignia-alertas hidden></span></button></li>
+                    <li><button type="button" class="nav-item" data-vista="dashboard"><span class="nav-emoji" aria-hidden="true">🏠</span><span>Inicio</span></button></li>
+                    <li><button type="button" class="nav-item" data-vista="ventas"><span class="nav-emoji" aria-hidden="true">🛒</span><span>Vender</span></button></li>
+                    <li><button type="button" class="nav-item" data-vista="recetas"><span class="nav-emoji" aria-hidden="true">🧁</span><span>Hornear</span></button></li>
+                    <li><button type="button" class="nav-item" data-vista="materias" data-activa-en="materias,productos,movimientos"><span class="nav-emoji" aria-hidden="true">📦</span><span>Inventario</span></button></li>
+                    <li><button type="button" class="nav-item" data-vista="alertas"><span class="nav-emoji" aria-hidden="true">🔔</span><span>Avisos</span><span class="nav-insignia" data-insignia-alertas hidden></span></button></li>
                 </ul>
-                <p class="nav-grupo" aria-hidden="true">Inventario</p>
+                <p class="nav-grupo" aria-hidden="true">Más</p>
                 <ul>
-                    <li><button type="button" class="nav-item" data-vista="materias">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349A1 1 0 0013 6.818L10 5.618 7 6.818V15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L11 4.323V3a1 1 0 011-1z" clip-rule="evenodd"/></svg>
-                        <span>Materias primas</span></button></li>
-                    <li><button type="button" class="nav-item" data-vista="productos">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"/><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"/><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"/></svg>
-                        <span>Productos</span></button></li>
-                    <li><button type="button" class="nav-item" data-vista="recetas">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/></svg>
-                        <span>Recetas</span></button></li>
-                    <li><button type="button" class="nav-item" data-vista="movimientos">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z"/></svg>
-                        <span>Movimientos</span></button></li>
-                </ul>
-                <p class="nav-grupo" aria-hidden="true" data-permiso="rentabilidad">Análisis</p>
-                <ul data-permiso="rentabilidad">
-                    <li><button type="button" class="nav-item" data-vista="rentabilidad">
-                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                        <span>Costos y márgenes</span></button></li>
+                    <li data-permiso="rentabilidad"><button type="button" class="nav-item" data-vista="rentabilidad"><span class="nav-emoji" aria-hidden="true">📈</span><span>Ganancias</span></button></li>
+                    <li><button type="button" class="nav-item nav-ayuda" id="btn-ayuda"><span class="nav-emoji" aria-hidden="true">❓</span><span>¿Cómo se usa?</span></button></li>
                 </ul>
             </nav>
 
@@ -117,6 +95,13 @@
                 <button type="button" class="btn-logout" id="btn-logout">Cerrar sesión</button>
             </div>
         </aside>
+        <nav class="barra-inferior" aria-label="Accesos principales">
+            <button type="button" class="nav-item" data-vista="dashboard"><span class="nav-emoji" aria-hidden="true">🏠</span><span>Inicio</span></button>
+            <button type="button" class="nav-item" data-vista="ventas"><span class="nav-emoji" aria-hidden="true">🛒</span><span>Vender</span></button>
+            <button type="button" class="nav-item" data-vista="recetas"><span class="nav-emoji" aria-hidden="true">🧁</span><span>Hornear</span></button>
+            <button type="button" class="nav-item" data-vista="materias" data-activa-en="materias,productos,movimientos"><span class="nav-emoji" aria-hidden="true">📦</span><span>Inventario</span></button>
+            <button type="button" class="nav-mas" id="btn-mas" aria-controls="menu-lateral" aria-expanded="false"><span class="nav-emoji" aria-hidden="true">☰</span><span>Más</span></button>
+        </nav>
 
         <main class="main" id="contenido" tabindex="-1"></main>
     </div>
@@ -126,7 +111,7 @@
 
     <noscript><p class="aviso-noscript">Pastel Stock necesita JavaScript habilitado para funcionar.</p></noscript>
 
-    <script src="/vendor/chart.umd.js"></script>
-    <script type="module" src="/js/main.js"></script>
+    <script src="vendor/chart.umd.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>

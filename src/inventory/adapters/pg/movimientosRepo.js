@@ -17,9 +17,9 @@ export function crearMovimientosRepo(db) {
       const cond = where.length ? `WHERE ${where.join(' AND ')}` : '';
       const total = (await db.query(`SELECT count(*)::int AS n FROM movimientos m ${cond}`, p)).rows[0].n;
       const { rows } = await db.query(
-        `SELECT m.id, m.materia_prima_codigo AS codigo, m.tipo, m.cantidad, m.proveedor, m.nota, m.motivo, m.creado_en AS "creadoEn",
+        `SELECT m.id, m.materia_prima_codigo AS codigo, mp.nombre, mp.unidad, m.tipo, m.cantidad, m.proveedor, m.nota, m.motivo, m.creado_en AS "creadoEn",
                 u.nombre AS "registradoPorNombre"
-           FROM movimientos m LEFT JOIN usuarios u ON u.id = m.usuario_id
+           FROM movimientos m LEFT JOIN usuarios u ON u.id = m.usuario_id JOIN materias_primas mp ON mp.codigo = m.materia_prima_codigo
            ${cond} ORDER BY m.creado_en DESC, m.id DESC LIMIT ${Number(limite)} OFFSET ${Number(offset)}`,
         p,
       );

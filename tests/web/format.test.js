@@ -48,12 +48,12 @@ test('estadoStock: misma regla que el MVP y el servidor', () => {
   assert.equal(estadoStock(2000, 3000).clave, 'BAJO');         // Mantequilla del MVP: 2000 > 1500
   assert.equal(estadoStock(1500, 3000).clave, 'CRITICO');      // ≤ 50 % del mínimo
   assert.equal(estadoStock(0, 5).clave, 'CRITICO');
-  assert.equal(estadoStock(1500, 3000).texto, 'Crítico');
+  assert.equal(estadoStock(1500, 3000).texto, 'Muy poco');
   assert.equal(estadoStock('x', 'y').clave, 'CRITICO');        // entradas no numéricas se tratan como 0
 });
 
 test('infoEstado: traduce el enum del API y tolera valores desconocidos', () => {
-  assert.deepEqual([infoEstado('OPTIMO').texto, infoEstado('OPTIMO').clase], ['Óptimo', 'optimo']);
+  assert.deepEqual([infoEstado('OPTIMO').texto, infoEstado('OPTIMO').clase], ['Suficiente', 'optimo']);
   assert.equal(infoEstado('BAJO').clase, 'bajo');
   assert.equal(infoEstado('RARO').texto, 'RARO');
   assert.equal(infoEstado(undefined).texto, '—');

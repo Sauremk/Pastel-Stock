@@ -17,7 +17,7 @@ export function crearVista(ctx) {
   selDias.addEventListener('change', () => { dias = Number(selDias.value); cargar(); });
 
   const el = h('section', { class: 'vista activa', 'aria-labelledby': 'titulo-alertas' },
-    encabezadoVista('Alertas', 'Lo que necesita atención hoy: vencimientos e insumos por reponer.', h('label', { class: 'control-cabecera' }, 'Avisar con', selDias, 'de anticipación')),
+    encabezadoVista('Avisos', 'Lo que necesita tu atención hoy.', h('label', { class: 'control-cabecera' }, 'Avisar con', selDias, 'de anticipación')),
     cuerpo);
   el.querySelector('h1').id = 'titulo-alertas';
 
@@ -46,17 +46,17 @@ export function crearVista(ctx) {
         h('div', { class: ['kpi', a.vencidos.length ? 'alerta' : null] }, h('h3', {}, 'Vencidos con stock'), h('div', { class: 'valor' }, String(a.vencidos.length)), h('div', { class: 'nota' }, 'No se pueden vender')),
         h('div', { class: ['kpi', a.porVencer.length ? 'aviso' : null] }, h('h3', {}, `Por vencer (≤ ${a.diasAviso} días)`), h('div', { class: 'valor' }, String(a.porVencer.length)), h('div', { class: 'nota' }, 'Priorízalos en mostrador')),
         h('div', { class: 'kpi' }, h('h3', {}, 'Valor en riesgo'), h('div', { class: 'valor' }, formatoCOP(a.valorEnRiesgoACosto)), h('div', { class: 'nota' }, 'A costo de producción')),
-        h('div', { class: ['kpi', a.ingredientesCriticos.length ? 'aviso' : null] }, h('h3', {}, 'Insumos por reponer'), h('div', { class: 'valor' }, String(a.ingredientesCriticos.length)), h('div', { class: 'nota' }, 'Bajo o en estado crítico'))),
+        h('div', { class: ['kpi', a.ingredientesCriticos.length ? 'aviso' : null] }, h('h3', {}, 'Ingredientes por comprar'), h('div', { class: 'valor' }, String(a.ingredientesCriticos.length)), h('div', { class: 'nota' }, 'Bajo o en estado crítico'))),
       seccion('⛔ Vencidos', a.vencidos.map((p) => itemProducto(p, true)), 'No hay productos vencidos con stock.'),
       seccion('⏳ Por vencer', a.porVencer.map((p) => itemProducto(p, false)), `Nada vence en los próximos ${a.diasAviso} días.`),
-      seccion('🧂 Insumos por reponer', a.ingredientesCriticos.map((m) => {
+      seccion('🧂 Ingredientes por comprar', a.ingredientesCriticos.map((m) => {
         const e = infoEstado(m.estado);
         return h('div', { class: ['alerta-item', m.estado === 'CRITICO' ? 'critico' : null] },
           h('div', { class: 'titulo' }, m.nombre, h('span', { class: 'sub solo-lectura' }, ` ${m.codigo}`)),
           insignia(e.texto, e.clase),
           h('span', { class: 'dato' }, `Hay ${formatoNumero(m.stock)} ${m.unidad} · mínimo ${formatoNumero(m.minimo)} ${m.unidad}`),
-          auth.puede('movimientos') ? h('a', { class: 'btn btn-secondary btn-sm', href: '#/movimientos' }, 'Registrar entrada') : null);
-      }), 'Todos los insumos están por encima de su mínimo.'));
+          auth.puede('movimientos') ? h('a', { class: 'btn btn-secondary btn-sm', href: '#/movimientos/entrada' }, 'Anotar lo que llegó') : null);
+      }), 'Tienes suficiente de todos los ingredientes.'));
   }
 
   async function cargar() {
@@ -70,5 +70,5 @@ export function crearVista(ctx) {
     }
   }
 
-  return { el, titulo: 'Alertas', cargar, destruir() { marcaCarga++; } };
+  return { el, titulo: 'Avisos', cargar, destruir() { marcaCarga++; } };
 }
