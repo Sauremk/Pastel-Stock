@@ -13,6 +13,8 @@ La forma más rápida de usarlo: **ábrelo en el navegador, instálalo en el cel
 - Enlace: <https://sauremk.github.io/Pastel-Stock/>
 - Usuarios de prueba: `admin`, `operador` o `contador`, contraseña `dulcehogar` (cada uno puede cambiarla en «Datos y cuenta»).
 - **Instalar:** en Android, Chrome → menú ⋮ → «Instalar aplicación» (o el botón «📲 Instalar la app»). En iPhone, Safari → Compartir → «Agregar a pantalla de inicio».
+- **Tu propia tienda (v1.5):** en el inicio de sesión toca «＋ Crear una tienda nueva». Empieza vacía y tú quedas como administrador. Cada tienda guarda sus datos aparte y se elige en «Tienda» al entrar ([ADR-19](docs/adr/ADR-19-equipo-y-tiendas.md)).
+- **Equipo (v1.5):** el administrador agrega personas en «Más → Equipo», les asigna un rol (operador, contador o administrador), las desactiva y les pone una contraseña nueva si la olvidan. En la app sin servidor el equipo comparte el mismo celular o computador.
 - **Respaldo:** los datos viven solo en ese dispositivo. Descarga un respaldo desde «Datos y cuenta» con regularidad.
 - Construir: `npm run build:pwa` (sale en `dist-pwa/`). Probar: `npx serve dist-pwa` o cualquier servidor estático.
 
@@ -70,6 +72,7 @@ Abra <http://localhost:3000>. Genere el secreto JWT con `openssl rand -base64 48
 | `RATE_LIMIT_GLOBAL_PER_MIN` | No | Peticiones por minuto por IP (600) |
 | `ACCESS_TTL_SECONDS` / `REFRESH_TTL_SECONDS` | No | Vida de los tokens (900 / 604800) |
 | `WEB_DIR` | No | Carpeta del frontend (`web`) |
+| `TIENDA_NOMBRE` | No | Nombre de la tienda que muestra la app (`Dulce Hogar`) |
 
 Los valores de ejemplo están en [`.env.example`](.env.example).
 

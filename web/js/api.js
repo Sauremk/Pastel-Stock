@@ -48,6 +48,7 @@ export function crearApi({ auth, fetchImpl = (...a) => globalThis.fetch(...a), b
     get: (ruta, consulta) => ejecutar('GET', ruta, { consulta }),
     post: (ruta, cuerpo, opciones = {}) => ejecutar('POST', ruta, { cuerpo, cabeceras: opciones.cabeceras }),
     put: (ruta, cuerpo) => ejecutar('PUT', ruta, { cuerpo }),
+    patch: (ruta, cuerpo) => ejecutar('PATCH', ruta, { cuerpo }),
     del: (ruta) => ejecutar('DELETE', ruta),
     descargar: (ruta, consulta) => ejecutar('GET', ruta, { consulta, archivo: true }),
   };

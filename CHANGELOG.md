@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico.
 
+## [1.5.0] — Equipo y tiendas (2026-11-12)
+
+### Añadido
+- **Equipo** (solo administrador, «Más → Equipo»): agregar personas con su rol y contraseña inicial (el usuario se sugiere a partir del nombre), cambiar nombre y rol, desactivar y volver a activar, y poner una contraseña nueva a quien la olvidó. Desactivar no borra sus ventas ni movimientos.
+  - API: `GET/POST /usuarios`, `PATCH /usuarios/{id}`, `POST /usuarios/{id}/contrasena` (ADR-19). Reglas compartidas por el servidor y la app sin servidor en `src/identity/domain/equipo.js`: nadie se quita su propio acceso de administrador y la tienda nunca se queda sin administrador.
+  - Desactivar, cambiar el rol o la contraseña cierra las sesiones de esa persona (revoca sus refresh tokens).
+- **Tiendas en la app sin servidor:** «＋ Crear una tienda nueva» en el inicio de sesión (nombre de la tienda y primer administrador). La tienda empieza vacía, guarda sus datos aparte y se elige en «Tienda» al entrar. Una tienda real puede eliminarse desde «Datos y cuenta»; la de demostración sigue disponible.
+- El login devuelve `usuario` y `tienda`; la app muestra el nombre de la tienda en el menú y en el Inicio. Variable `TIENDA_NOMBRE` para el servidor.
+
+### Verificado
+- 9 pruebas de integración del equipo con PostgreSQL real, 4 de la app sin servidor y 1 E2E (el administrador agrega a alguien y esa persona entra con su rol). RBAC y contrato derivados del OpenAPI, en verde.
+- axe-core: 0 violaciones WCAG 2 A/AA en inicio de sesión, «Crear tienda», «Equipo» y «Agregar persona» (claro y oscuro, 1366 y 390 px).
+
 ## [1.4.1] — Logo de Pastel Stock (2026-11-12)
 
 ### Cambiado

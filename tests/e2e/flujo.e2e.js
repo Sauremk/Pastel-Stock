@@ -10,7 +10,7 @@ before(async () => {
   e = await crearEntorno();
   servidor = await new Promise((ok) => { const s = e.app.listen(0, () => ok(s)); });
   base = `http://127.0.0.1:${servidor.address().port}`;
-  navegador = await chromium.launch();
+  navegador = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined }); // CHROME_PATH: usar un Chrome ya instalado
 });
 after(async () => { await navegador?.close(); servidor?.close(); await e?.cerrar(); });
 
@@ -144,4 +144,33 @@ test('persona nueva: ve la guía de bienvenida y el atajo «Registrar una venta�
   await pagina.getByText('Total a cobrar').waitFor();
   assert.deepEqual(errores, []);
   await pagina.close();
+});
+
+test('administrador: agrega a una persona en «Equipo» y esa persona entra con su rol', async () => {
+  const { pagina, errores } = await abrir('admin');
+  await pagina.click('.sidebar [data-vista="equipo"]');
+  await pagina.getByRole('heading', { level: 1, name: 'Equipo' }).waitFor();
+  await pagina.getByRole('button', { name: '＋ Agregar persona' }).click();
+  const dialogo = pagina.getByRole('dialog');
+  await dialogo.getByLabel('¿Cómo se llama?').fill('Lucía Gómez');
+  assert.equal(await dialogo.getByLabel('Usuario para entrar').inputValue(), 'lucia.gomez', 'el usuario se sugiere sin tildes');
+  await dialogo.getByLabel('¿Qué va a hacer?').selectOption('contador');
+  await dialogo.getByLabel('Contraseña inicial').fill('Clave-Lucia-1');
+  await dialogo.getByRole('button', { name: 'Agregar', exact: true }).click();
+  await pagina.getByRole('row', { name: /Lucía Gómez/ }).waitFor();
+  // Su propia fila no tiene «Desactivar»
+  assert.equal(await pagina.getByRole('row', { name: /Ana García/ }).getByRole('button', { name: 'Desactivar' }).count(), 0);
+  assert.deepEqual(errores, []);
+  await pagina.close();
+
+  const otra = await navegador.newPage({ viewport: { width: 1366, height: 900 } });
+  await otra.clock.setFixedTime(AHORA);
+  await otra.goto(base);
+  await otra.fill('#login-user', 'lucia.gomez');
+  await otra.fill('#login-pass', 'Clave-Lucia-1');
+  await otra.click('#login-submit');
+  await otra.getByRole('heading', { level: 1, name: /^Buen(os|as) (días|tardes|noches)/ }).waitFor();
+  assert.equal(await otra.locator('#user-role').textContent(), 'Contador');
+  assert.equal(await otra.locator('.sidebar [data-vista="equipo"]').isVisible(), false, 'el contador no ve «Equipo»');
+  await otra.close();
 });

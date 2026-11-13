@@ -8,6 +8,39 @@ export function crearUsuariosRepo(db) {
       const { rows } = await db.query('SELECT id, usuario, nombre, rol, activo FROM usuarios WHERE id = $1', [id]);
       return rows[0] ?? null;
     },
+    async listar() {
+      const { rows } = await db.query('SELECT id, usuario, nombre, rol, activo, creado_en AS "creadoEn" FROM usuarios ORDER BY activo DESC, nombre, id');
+      return rows;
+    },
+    /** Lee un usuario bloqueando su fila (dentro de una transacción). */
+    async porIdParaActualizar(id) {
+      const { rows } = await db.query('SELECT id, usuario, nombre, rol, activo, creado_en AS "creadoEn" FROM usuarios WHERE id = $1 FOR UPDATE', [id]);
+      return rows[0] ?? null;
+    },
+    /** Cuenta los administradores activos bloqueando sus filas: dos cambios a la vez no pueden dejar la tienda sin administrador. */
+    async contarAdminsActivos() {
+      const { rows } = await db.query("SELECT id FROM usuarios WHERE rol = 'admin' AND activo FOR UPDATE");
+      return rows.length;
+    },
+    async crear({ usuario, passwordHash, nombre, rol }) {
+      const { rows } = await db.query(
+        'INSERT INTO usuarios (usuario, password_hash, nombre, rol) VALUES ($1,$2,$3,$4) RETURNING id, usuario, nombre, rol, activo, creado_en AS "creadoEn"',
+        [usuario, passwordHash, nombre, rol],
+      );
+      return rows[0];
+    },
+    async actualizar(id, { nombre, rol, activo }) {
+      const { rows } = await db.query(
+        `UPDATE usuarios SET nombre = COALESCE($2, nombre), rol = COALESCE($3, rol), activo = COALESCE($4, activo)
+         WHERE id = $1 RETURNING id, usuario, nombre, rol, activo, creado_en AS "creadoEn"`,
+        [id, nombre ?? null, rol ?? null, activo ?? null],
+      );
+      return rows[0] ?? null;
+    },
+    async cambiarClave(id, passwordHash) {
+      const { rowCount } = await db.query('UPDATE usuarios SET password_hash = $2 WHERE id = $1', [id, passwordHash]);
+      return rowCount === 1;
+    },
     async crearSiNoExiste({ usuario, passwordHash, nombre, rol }) {
       const { rowCount } = await db.query(
         'INSERT INTO usuarios (usuario, password_hash, nombre, rol) VALUES ($1,$2,$3,$4) ON CONFLICT (usuario) DO NOTHING',

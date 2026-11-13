@@ -17,6 +17,8 @@ import { crearUsuariosRepo, crearRefreshRepo } from './identity/adapters/pg/usua
 import { crearAuthService } from './identity/application/authService.js';
 import { autenticar } from './identity/adapters/http/middleware.js';
 import { crearAuthRouter } from './identity/adapters/http/authRouter.js';
+import { crearEquipoService } from './identity/application/equipoService.js';
+import { crearEquipoRouter } from './identity/adapters/http/equipoRouter.js';
 
 import { crearInventarioUow } from './inventory/adapters/pg/unidadDeTrabajo.js';
 import { crearCasosInventario } from './inventory/application/casosDeUso.js';
@@ -98,7 +100,8 @@ export function crearApp({ pool, config, reloj = () => new Date(), logger = crea
 
   // --- Composición de contextos
   const usuariosRepo = crearUsuariosRepo(pool);
-  const authService = crearAuthService({ usuariosRepo, refreshRepo: crearRefreshRepo(pool), secreto: config.jwtSecret, accessTtl: config.accessTtlSeg, refreshTtl: config.refreshTtlSeg, bcryptCost: config.bcryptCost });
+  const authService = crearAuthService({ usuariosRepo, refreshRepo: crearRefreshRepo(pool), secreto: config.jwtSecret, accessTtl: config.accessTtlSeg, refreshTtl: config.refreshTtlSeg, bcryptCost: config.bcryptCost, tienda: config.nombreTienda });
+  const equipo = crearEquipoService({ pool, authService });
   const uowInventario = crearInventarioUow(pool);
   const casosInventario = crearCasosInventario({ uow: uowInventario });
   const casosCatalogo = crearCasosCatalogo({ pool, inventario: uowInventario });
@@ -112,6 +115,7 @@ export function crearApp({ pool, config, reloj = () => new Date(), logger = crea
   api.get('/health', salud);
   api.use(crearAuthRouter({ authService, validar, limitePorMinuto: config.limiteLoginPorMinuto }));
   api.use(autenticar(authService)); // todo lo que sigue exige JWT (el contrato declara security global bearerAuth)
+  api.use(crearEquipoRouter({ equipo, validar }));
   api.use(crearInventarioRouter({ casos: casosInventario, validar }));
   api.use(crearCatalogoRouter({ casos: casosCatalogo, validar }));
   api.use(crearVentasRouter({ casos: casosVentas, validar }));

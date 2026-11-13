@@ -137,7 +137,7 @@ export function crearVista(ctx) {
         h('div', { class: 'db-portada-izq' },
           h('p', { class: 'db-sobretitulo' }, h('span', { class: 'db-punto-vivo' }), ' En vivo · ', hoyTexto, ' · ', relojEl),
           h('h1', { id: 'titulo-dashboard', tabindex: '-1' }, `${saludo()}${nombre ? `, ${nombre}` : ''} `, h('span', { class: 'db-mano', 'aria-hidden': 'true' }, '👋')),
-          h('p', { class: 'db-bajada' }, 'Así va Dulce Hogar en los últimos 30 días.')),
+          h('p', { class: 'db-bajada' }, `Así va ${ctx.auth.usuario()?.tienda ?? 'Dulce Hogar'} en los últimos 30 días.`)),
         h('div', { class: 'db-portada-der' },
           h('p', { class: 'db-etiqueta' }, 'Vendiste en 30 días'),
           h('p', { class: 'db-cifra-gigante' }, contador(d.ventasUltimos30Dias, (v) => formatoCOP(Math.round(v)), { duracion: 1800 })),

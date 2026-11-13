@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pastel Stock API
-  version: 1.1.0
+  version: 1.5.0
   summary: API de inventario de materias primas, productos terminados y recetas para Dulce Hogar.
   description: 'Contrato **Design-First** de la API de Pastel Stock (monolito modular, Node.js + PostgreSQL).
 
@@ -93,6 +93,116 @@ paths:
           $ref: '#/components/responses/Solicitud400'
         '401':
           $ref: '#/components/responses/NoAutenticado401'
+  /usuarios:
+    get:
+      tags:
+      - Identidad
+      operationId: listarUsuarios
+      summary: Listar las personas del equipo (v1.5)
+      x-roles:
+      - admin
+      responses:
+        '200':
+          description: Todas las personas, activas primero.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioLista'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+    post:
+      tags:
+      - Identidad
+      operationId: crearUsuario
+      summary: Agregar una persona al equipo con su rol y contraseña inicial (v1.5)
+      x-roles:
+      - admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioCrear'
+      responses:
+        '201':
+          description: Persona creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /usuarios/{id}:
+    patch:
+      tags:
+      - Identidad
+      operationId: actualizarUsuario
+      summary: Cambiar nombre, rol o estado (activo) de una persona (v1.5)
+      description: Nadie puede quitarse a sí mismo el rol de administrador ni desactivarse, y siempre queda al menos un
+        administrador activo (409). Desactivar o cambiar el rol revoca los refresh tokens de esa persona.
+      x-roles:
+      - admin
+      parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioActualizar'
+      responses:
+        '200':
+          description: Persona actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '409':
+          $ref: '#/components/responses/Conflicto409'
+        '422':
+          $ref: '#/components/responses/Validacion422'
+  /usuarios/{id}/contrasena:
+    post:
+      tags:
+      - Identidad
+      operationId: restablecerContrasena
+      summary: Poner una contraseña nueva a una persona que la olvidó (v1.5)
+      description: Revoca sus refresh tokens; debe volver a iniciar sesión con la contraseña nueva.
+      x-roles:
+      - admin
+      parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaveNueva'
+      responses:
+        '204':
+          description: Contraseña cambiada.
+        '401':
+          $ref: '#/components/responses/NoAutenticado401'
+        '403':
+          $ref: '#/components/responses/Prohibido403'
+        '404':
+          $ref: '#/components/responses/NoEncontrado404'
+        '422':
+          $ref: '#/components/responses/Validacion422'
   /materias-primas:
     get:
       tags:
@@ -993,6 +1103,13 @@ components:
       bearerFormat: JWT
       description: Access token JWT (HS256 en desarrollo; vida 15 min). Claims `sub`, `rol`, `iat`, `exp`.
   parameters:
+    IdUsuario:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]{0,8}$
     SkuRuta:
       name: sku
       in: path
@@ -1167,6 +1284,101 @@ components:
           type: string
           examples:
           - Ana García
+        usuario:
+          type: string
+          description: Nombre de usuario con el que inició sesión (v1.5).
+        tienda:
+          type: string
+          description: Nombre de la tienda que se muestra en la app (v1.5).
+          examples:
+          - Dulce Hogar
+    UsuarioNombre:
+      type: string
+      pattern: ^[a-z0-9][a-z0-9._-]{2,39}$
+      description: Nombre para iniciar sesión, en minúsculas y sin espacios.
+      examples:
+      - maria.p
+    UsuarioCrear:
+      type: object
+      required:
+      - usuario
+      - nombre
+      - rol
+      - contrasena
+      additionalProperties: false
+      properties:
+        usuario:
+          $ref: '#/components/schemas/UsuarioNombre'
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 80
+        rol:
+          $ref: '#/components/schemas/Rol'
+        contrasena:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+          writeOnly: true
+    UsuarioActualizar:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 80
+        rol:
+          $ref: '#/components/schemas/Rol'
+        activo:
+          type: boolean
+    ClaveNueva:
+      type: object
+      required:
+      - contrasena
+      additionalProperties: false
+      properties:
+        contrasena:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+          writeOnly: true
+    Usuario:
+      type: object
+      required:
+      - id
+      - usuario
+      - nombre
+      - rol
+      - activo
+      properties:
+        id:
+          type: integer
+        usuario:
+          $ref: '#/components/schemas/UsuarioNombre'
+        nombre:
+          type: string
+        rol:
+          $ref: '#/components/schemas/Rol'
+        activo:
+          type: boolean
+        creadoEn:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    UsuarioLista:
+      type: object
+      required:
+      - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Usuario'
     Rol:
       type: string
       enum:

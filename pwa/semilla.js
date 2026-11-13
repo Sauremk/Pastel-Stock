@@ -53,3 +53,18 @@ export async function sembrarDemo({ ahora = new Date(), hashClave }) {
   d.recetas.push({ id: sig('receta'), productoSku: RECETA_DEMO.sku, ingredientes: RECETA_DEMO.ingredientes.map(([codigoMateriaPrima, cantidad, unidad]) => ({ codigoMateriaPrima, cantidad, unidad })) });
   return d;
 }
+
+/**
+ * Datos de una tienda NUEVA creada desde la app (v1.5, ADR-19): vacía, con su nombre y su primer administrador.
+ * No trae ingredientes, productos ni ventas de ejemplo.
+ */
+export async function crearDatosTienda({ nombreTienda, admin, ahora = new Date(), hashClave }) {
+  const sal = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  return {
+    version: VERSION_DATOS,
+    tienda: { nombre: nombreTienda, creadaEn: ahora.toISOString() },
+    secuencias: { movimiento: 0, movimientoProducto: 0, venta: 0, receta: 0 },
+    usuarios: [{ id: 1, usuario: admin.usuario, nombre: admin.nombre, rol: 'admin', activo: true, creadoEn: ahora.toISOString(), sal, hash: await hashClave(admin.contrasena, sal) }],
+    materias: [], productos: [], recetas: [], movimientos: [], movimientosProducto: [], ventas: [], claves: {}, sesiones: {},
+  };
+}
